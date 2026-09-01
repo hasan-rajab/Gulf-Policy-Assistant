@@ -195,8 +195,6 @@ class EnterpriseActionService:
             if row["status"] != "approved":
                 raise ValueError(f"Action cannot execute from status {row['status']}")
 
-            # Portfolio-safe executor: produces a deterministic external-system
-            # handoff artifact instead of pretending to call a live HR/IT system.
             result = {
                 "execution_mode": "demo_controlled_handoff",
                 "external_reference": f"NEXUS-{action_id.split('-')[0].upper()}",
@@ -209,7 +207,7 @@ class EnterpriseActionService:
                 SET status='executed', executed_at=?, result=?
                 WHERE id=?
                 """,
-                (json.dumps(result, sort_keys=True), executed_at, action_id),
+                (executed_at, json.dumps(result, sort_keys=True), action_id),
             )
             self._connection.commit()
 
