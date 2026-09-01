@@ -31,8 +31,42 @@ jobs:
 
       - name: Run evaluation set
         run: |
-          PYTHONPATH=backend python backend/scripts/evaluate.py evaluation/eval_set.json > /tmp/eval-output.json
-          python -c "import json; from pathlib import Path; p=Path('/tmp/eval-output.json'); result=json.loads(p.read_text()); required={'total_cases':8,'retrieval_hit_at_k':1.0,'citation_rate':1.0,'grounding_decision_accuracy':1.0,'language_match_rate':1.0,'grounded_keyword_coverage':1.0}; failed={k:(result.get(k),v) for k,v in required.items() if result.get(k)!=v}; print(json.dumps(result, indent=2)); assert not failed, f'Evaluation CI check failed: {failed}'; print('Strict evaluation metrics check passed.')"
+          # Capture raw output (logs + JSON) to a file, then extract the final JSON object
+          PYTHONPATH=backend python backend/scripts/evaluate.py evaluation/eval_set.json > /tmp/eval-raw.txt
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('/tmp/eval-raw.txt')
+          if not p.exists():
+              raise SystemExit('missing evaluation output')
+          s = p.read_text()
+          # Find the last JSON object start to avoid consuming log lines printed before the JSON
+          idx = s.rfind('{')
+          if idx == -1:
+              raise SystemExit('no JSON object found in evaluation output')
+          try:
+              result = json.loads(s[idx:])
+          except Exception as e:
+              print('Failed to parse JSON from evaluation output:', e)
+              print('--- raw output ---')
+              print(s)
+              raise
+          required = {
+              'total_cases': 8,
+              'retrieval_hit_at_k': 1.0,
+              'citation_rate': 1.0,
+              'grounding_decision_accuracy': 1.0,
+              'language_match_rate': 1.0,
+              'grounded_keyword_coverage': 1.0,
+          }
+          failed = {k: (result.get(k), v) for k, v in required.items() if result.get(k) != v}
+          if failed:
+              print('Evaluation CI check failed:')
+              for key, (actual, expected) in failed.items():
+                  print(f'  {key}: expected {expected}, got {actual}')
+              raise SystemExit(1)
+          print('Strict evaluation metrics check passed.')
+          PY
 
   frontend-build:
     runs-on: ubuntu-latest
