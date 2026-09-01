@@ -2,6 +2,7 @@ from functools import lru_cache
 
 from app.core.config import get_settings
 from app.services.actions import EnterpriseActionService
+from app.services.actions_bigquery import BigQueryEnterpriseActionService
 from app.services.audit import BigQueryAuditStore, SQLiteAuditStore
 from app.services.conversations import ConversationStore
 from app.services.embeddings import GeminiEmbeddingProvider, LocalHashEmbeddingProvider
@@ -53,6 +54,8 @@ def get_audit_store():
 @lru_cache
 def get_action_service():
     settings = get_settings()
+    if settings.vector_backend == "bigquery":
+        return BigQueryEnterpriseActionService(settings, get_audit_store())
     return EnterpriseActionService(
         settings.data_dir / "nexus_actions.db",
         get_audit_store(),
