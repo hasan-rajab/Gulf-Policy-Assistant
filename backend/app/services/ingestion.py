@@ -15,10 +15,34 @@ class IngestionService:
         self.embedder = embedder
         self.store = store
 
-    def ingest_bytes(self, filename: str, data: bytes, source_uri: str | None = None) -> dict:
+    @staticmethod
+    def _normalize_acl(values: list[str] | None) -> list[str]:
+        return sorted({str(value).strip().lower() for value in (values or []) if str(value).strip()})
+
+    def ingest_bytes(
+        self,
+        filename: str,
+        data: bytes,
+        source_uri: str | None = None,
+        *,
+        visibility: str = "public",
+        allowed_roles: list[str] | None = None,
+        allowed_departments: list[str] | None = None,
+    ) -> dict:
         max_bytes = self.settings.max_file_mb * 1024 * 1024
         if len(data) > max_bytes:
             raise ValueError(f"File exceeds {self.settings.max_file_mb} MB limit")
+
+        visibility_n = visibility.strip().lower()
+        if visibility_n not in {"public", "restricted"}:
+            raise ValueError("visibility must be 'public' or 'restricted'")
+        roles = self._normalize_acl(allowed_roles)
+        departments = self._normalize_acl(allowed_departments)
+        if visibility_n == "restricted" and not roles and not departments:
+            # Explicitly permit admin-only policy, but force the caller to say so
+            # via a synthetic knowledge_admin grant instead of silently creating
+            # a document nobody except implicit admins understands.
+            roles = ["knowledge_admin"]
 
         pages = load_document(filename, data)
         digest = sha256(data).hexdigest()[:16]
@@ -57,7 +81,13 @@ class IngestionService:
                     page=chunk.page,
                     language=chunk.language,
                     source_uri=source_uri or filename,
-                    metadata={"sha256_16": digest},
+                    metadata={
+                        "sha256_16": digest,
+                        "classification": visibility_n,
+                    },
+                    visibility=visibility_n,
+                    allowed_roles=roles,
+                    allowed_departments=departments,
                 )
             )
         self.store.upsert(stored)
@@ -65,4 +95,7 @@ class IngestionService:
             "document_id": document_id,
             "title": title,
             "chunks_created": len(stored),
+            "visibility": visibility_n,
+            "allowed_roles": roles,
+            "allowed_departments": departments,
         }
