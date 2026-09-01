@@ -1,5 +1,6 @@
 import re
 
+from app.core.access import AccessContext
 from app.services.language import detect_language
 from app.services.rag import RAGService
 
@@ -8,11 +9,12 @@ class EvaluationService:
     def __init__(self, rag: RAGService):
         self.rag = rag
 
-    def run(self, cases: list[dict], owner: str) -> dict:
+    def run(self, cases: list[dict], owner: str | AccessContext) -> dict:
         case_results = []
         latencies = []
         retrieval_hits = language_matches = grounding_decisions = 0
         citation_successes = 0
+        citation_integrity_successes = 0
         grounded_case_count = 0
         keyword_scores = []
 
@@ -24,16 +26,23 @@ class EvaluationService:
 
             expected_docs = {d.lower() for d in case.get("expected_source_titles", [])}
             returned_docs = {s.title.lower() for s in response.sources}
+            citation_numbers = [int(value) for value in re.findall(r"\[S(\d+)\]", response.answer)]
+
             if expected_grounded:
                 retrieval_hit = bool(expected_docs & returned_docs) if expected_docs else bool(response.sources)
                 grounded_case_count += 1
-                has_citation = bool(re.search(r"\[S\d+\]", response.answer))
+                has_citation = bool(citation_numbers)
                 citation_successes += int(has_citation)
+                citation_integrity = has_citation and all(
+                    1 <= number <= len(response.sources)
+                    for number in citation_numbers
+                )
             else:
-                # Correct behavior for unsupported questions is to retrieve no
-                # sufficiently relevant approved context and cite nothing.
                 retrieval_hit = not response.grounded
-                has_citation = not bool(re.search(r"\[S\d+\]", response.answer))
+                has_citation = not bool(citation_numbers)
+                citation_integrity = not bool(citation_numbers)
+
+            citation_integrity_successes += int(citation_integrity)
             retrieval_hits += int(retrieval_hit)
 
             expected_lang = case.get("language") or detect_language(case["query"])
@@ -54,6 +63,7 @@ class EvaluationService:
                     "grounding_decision_correct": grounding_ok,
                     "retrieval_hit": retrieval_hit,
                     "citation_behavior_correct": has_citation,
+                    "citation_source_integrity": citation_integrity,
                     "language_match": language_match,
                     "keyword_coverage": round(coverage, 3),
                     "latency_ms": response.latency_ms,
@@ -67,6 +77,7 @@ class EvaluationService:
             "total_cases": len(cases),
             "retrieval_hit_at_k": retrieval_hits / n,
             "citation_rate": citation_successes / grounded_case_count if grounded_case_count else 1.0,
+            "citation_source_integrity_rate": citation_integrity_successes / n,
             "grounding_decision_accuracy": grounding_decisions / n,
             "language_match_rate": language_matches / n,
             "grounded_keyword_coverage": sum(keyword_scores) / n,
