@@ -11,12 +11,41 @@ CREATE TABLE IF NOT EXISTS `PROJECT_ID.enterprise_rag.policy_chunks` (
   page INT64,
   language STRING,
   source_uri STRING,
-  metadata STRING
+  metadata STRING,
+  visibility STRING NOT NULL DEFAULT 'public',
+  allowed_roles ARRAY<STRING>,
+  allowed_departments ARRAY<STRING>
 );
 
--- Vector indexes are most useful when the corpus is large enough to justify ANN.
--- Run after data is loaded; index population is asynchronous.
+-- Retrieval authorization fields are stored in the vector index so VECTOR_SEARCH
+-- can pre-filter the base table before ANN instead of fetching restricted chunks
+-- and discarding them afterward.
 CREATE OR REPLACE VECTOR INDEX policy_chunks_embedding_idx
 ON `PROJECT_ID.enterprise_rag.policy_chunks`(embedding)
-STORING(document_id, title, chunk_index, page, language, source_uri)
+STORING(
+  document_id,
+  title,
+  chunk_index,
+  page,
+  language,
+  source_uri,
+  visibility,
+  allowed_roles,
+  allowed_departments
+)
 OPTIONS(distance_type='COSINE', index_type='IVF');
+
+CREATE TABLE IF NOT EXISTS `PROJECT_ID.enterprise_rag.audit_events` (
+  event_id STRING NOT NULL,
+  timestamp TIMESTAMP NOT NULL,
+  actor STRING NOT NULL,
+  action STRING NOT NULL,
+  resource STRING,
+  outcome STRING NOT NULL,
+  request_id STRING,
+  details STRING,
+  previous_hash STRING,
+  event_hash STRING NOT NULL
+)
+PARTITION BY DATE(timestamp)
+CLUSTER BY actor, action, outcome;
