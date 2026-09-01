@@ -6,21 +6,24 @@ services:
       DATA_DIR: /app/data
       SAMPLE_DATA_DIR: /sample_data
     volumes:
-      - rag_data:/app/data
+      - nexus_data:/app/data
       - ./sample_data:/sample_data:ro
     ports:
       - "8080:8080"
+    restart: unless-stopped
 
   frontend:
     build: ./frontend
     environment:
       BACKEND_URL: http://backend:8080
       NEXT_PUBLIC_DEMO_MODE: "true"
-      NEXT_PUBLIC_APP_NAME: Gulf Horizon Policy Assistant
+      NEXT_PUBLIC_APP_NAME: NEXUS Enterprise AI
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "3000:3000"
+    restart: unless-stopped
 
 volumes:
-  rag_data:
+  nexus_data:

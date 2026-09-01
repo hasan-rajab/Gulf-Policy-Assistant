@@ -1,5 +1,4 @@
 from contextlib import asynccontextmanager
-from pathlib import Path
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
@@ -31,7 +30,12 @@ def _bootstrap_demo_documents() -> None:
     for path in sorted(sample_dir.iterdir()):
         if path.suffix.lower() in {".pdf", ".docx", ".txt", ".md"}:
             try:
-                result = ingestor.ingest_bytes(path.name, path.read_bytes(), source_uri=f"approved://policies/{path.name}")
+                result = ingestor.ingest_bytes(
+                    path.name,
+                    path.read_bytes(),
+                    source_uri=f"approved://policies/{path.name}",
+                    visibility="public",
+                )
                 logger.info("demo_document_ingested", **result)
             except Exception:
                 logger.exception("demo_document_ingest_failed", filename=path.name)
@@ -45,27 +49,33 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Gulf Horizon Enterprise RAG API",
-    version="1.0.0",
-    description="Bilingual Arabic/English policy RAG prototype for a fictional GCC bank.",
+    title="NEXUS Enterprise AI API",
+    version="2.0.0",
+    description=(
+        "Bilingual enterprise RAG with retrieval-time authorization, hybrid "
+        "reranking, auditable abstention, and approval-gated enterprise actions."
+    ),
     lifespan=lifespan,
 )
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-User-Email"],
 )
 
 
 @app.middleware("http")
 async def request_context(request: Request, call_next):
     request_id = request.headers.get("x-request-id", str(uuid4()))
+    request.state.request_id = request_id
     structlog.contextvars.bind_contextvars(request_id=request_id, path=request.url.path)
     try:
         response = await call_next(request)
         response.headers["x-request-id"] = request_id
+        response.headers["x-content-type-options"] = "nosniff"
+        response.headers["referrer-policy"] = "no-referrer"
         return response
     finally:
         structlog.contextvars.clear_contextvars()
@@ -78,7 +88,7 @@ async def unhandled_exception(request: Request, exc: Exception):
         status_code=500,
         content={
             "detail": "The service could not complete the request.",
-            "request_id": request.headers.get("x-request-id"),
+            "request_id": getattr(request.state, "request_id", None),
         },
     )
 

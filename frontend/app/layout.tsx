@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Gulf Horizon Policy Assistant",
-  description: "Bilingual enterprise RAG customer-engineering prototype",
+  title: "NEXUS Enterprise AI",
+  description: "Governed bilingual enterprise RAG with retrieval-time authorization, grounded evidence, auditability, and approval-gated actions",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

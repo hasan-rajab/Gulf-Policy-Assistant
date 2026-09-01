@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -13,6 +13,8 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user_email: str
+    roles: list[str] = Field(default_factory=list)
+    departments: list[str] = Field(default_factory=list)
 
 
 class Source(BaseModel):
@@ -31,7 +33,7 @@ class Source(BaseModel):
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     sources: list[Source] = Field(default_factory=list)
 
 
@@ -59,6 +61,7 @@ class DocumentInfo(BaseModel):
     chunks: int
     source_uri: str | None = None
     language: str = "mixed"
+    visibility: str = "public"
 
 
 class IngestResponse(BaseModel):
@@ -66,6 +69,9 @@ class IngestResponse(BaseModel):
     title: str
     chunks_created: int
     backend: str
+    visibility: str = "public"
+    allowed_roles: list[str] = Field(default_factory=list)
+    allowed_departments: list[str] = Field(default_factory=list)
 
 
 class EvaluationRequest(BaseModel):
@@ -76,8 +82,32 @@ class EvaluationResponse(BaseModel):
     total_cases: int
     retrieval_hit_at_k: float
     citation_rate: float
+    citation_source_integrity_rate: float = 1.0
     grounding_decision_accuracy: float
     language_match_rate: float
     grounded_keyword_coverage: float
     avg_latency_ms: float
     cases: list[dict[str, Any]]
+
+
+class ActionRequest(BaseModel):
+    action_name: Literal[
+        "create_it_service_ticket",
+        "request_hr_policy_review",
+        "request_policy_exception",
+    ]
+    payload: dict[str, Any]
+    idempotency_key: str | None = Field(default=None, max_length=128)
+
+
+class ActionResponse(BaseModel):
+    id: str
+    requester: str
+    action_name: str
+    payload: dict[str, Any]
+    status: Literal["pending_approval", "approved", "executed"]
+    created_at: str
+    approved_at: str | None = None
+    approved_by: str | None = None
+    executed_at: str | None = None
+    result: dict[str, Any] | None = None

@@ -5,6 +5,7 @@ import threading
 
 import numpy as np
 
+from app.core.access import AccessContext
 from app.stores.base import SearchResult, StoredChunk, VectorStore
 
 
@@ -27,6 +28,7 @@ class LocalVectorStore(VectorStore):
         if not self.path.exists():
             return
         raw = json.loads(self.path.read_text(encoding="utf-8"))
+        # StoredChunk defaults keep pre-NEXUS local indexes backward compatible.
         self._chunks = [StoredChunk(**item) for item in raw]
 
     def _save(self) -> None:
@@ -40,13 +42,23 @@ class LocalVectorStore(VectorStore):
             self._chunks.extend(chunks)
             self._save()
 
-    def search(self, query_embedding: list[float], top_k: int) -> list[SearchResult]:
-        if not self._chunks:
+    def _authorized_chunks(self, access: AccessContext | None) -> list[StoredChunk]:
+        """Apply ACLs before semantic or lexical scoring."""
+        return [chunk for chunk in self._chunks if chunk.is_authorized_for(access)]
+
+    def search(
+        self,
+        query_embedding: list[float],
+        top_k: int,
+        access: AccessContext | None = None,
+    ) -> list[SearchResult]:
+        chunks = self._authorized_chunks(access)
+        if not chunks:
             return []
         q = np.asarray(query_embedding, dtype=np.float64)
         qnorm = np.linalg.norm(q) or 1.0
         scored: list[SearchResult] = []
-        for chunk in self._chunks:
+        for chunk in chunks:
             v = np.asarray(chunk.embedding, dtype=np.float64)
             denom = (np.linalg.norm(v) or 1.0) * qnorm
             cosine = float(np.dot(v, q) / denom)
@@ -63,14 +75,20 @@ class LocalVectorStore(VectorStore):
             if len(token) > 1 and token not in cls._LEXICAL_STOPWORDS
         ]
 
-    def _lexical_search(self, query_text: str, top_k: int) -> list[SearchResult]:
+    def _lexical_search(
+        self,
+        query_text: str,
+        top_k: int,
+        access: AccessContext | None = None,
+    ) -> list[SearchResult]:
         query_tokens = self._tokens(query_text)
-        if not query_tokens or not self._chunks:
+        chunks = self._authorized_chunks(access)
+        if not query_tokens or not chunks:
             return []
 
         qset = set(query_tokens)
         scored: list[SearchResult] = []
-        for chunk in self._chunks:
+        for chunk in chunks:
             doc_tokens = self._tokens(f"{chunk.title} {chunk.text}")
             if not doc_tokens:
                 continue
@@ -91,17 +109,12 @@ class LocalVectorStore(VectorStore):
         query_text: str,
         query_embedding: list[float],
         top_k: int,
+        access: AccessContext | None = None,
     ) -> list[SearchResult]:
-        """Fuse semantic and lexical rankings with reciprocal-rank fusion.
-
-        RRF is used only to rank candidates because rank scores are not calibrated
-        relevance probabilities. Grounding confidence remains based on the raw
-        semantic/lexical evidence so weak candidates are not promoted solely by
-        appearing high in a short ranking.
-        """
+        """Fuse ACL-scoped semantic and lexical rankings with RRF."""
         candidate_k = max(top_k * 3, 10)
-        vector_results = self.search(query_embedding, candidate_k)
-        lexical_results = self._lexical_search(query_text, candidate_k)
+        vector_results = self.search(query_embedding, candidate_k, access=access)
+        lexical_results = self._lexical_search(query_text, candidate_k, access=access)
 
         by_id: dict[str, SearchResult] = {}
         vector_scores: dict[str, float] = {}
@@ -135,14 +148,12 @@ class LocalVectorStore(VectorStore):
                 )
             )
 
-        # Primary ordering remains RRF. Confidence breaks ranking ties while the
-        # returned SearchResult.score stays calibrated for the grounding gate.
         candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
         return [item[2] for item in candidates[:top_k]]
 
-    def list_documents(self) -> list[dict]:
+    def list_documents(self, access: AccessContext | None = None) -> list[dict]:
         grouped: dict[str, dict] = {}
-        for c in self._chunks:
+        for c in self._authorized_chunks(access):
             item = grouped.setdefault(
                 c.document_id,
                 {
@@ -151,6 +162,7 @@ class LocalVectorStore(VectorStore):
                     "chunks": 0,
                     "source_uri": c.source_uri,
                     "language": c.language,
+                    "visibility": c.visibility,
                 },
             )
             item["chunks"] += 1
