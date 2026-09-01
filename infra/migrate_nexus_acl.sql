@@ -43,3 +43,19 @@ CREATE TABLE IF NOT EXISTS `PROJECT_ID.enterprise_rag.audit_events` (
 )
 PARTITION BY DATE(timestamp)
 CLUSTER BY actor, action, outcome;
+
+CREATE TABLE IF NOT EXISTS `PROJECT_ID.enterprise_rag.action_requests` (
+  id STRING NOT NULL,
+  requester STRING NOT NULL,
+  action_name STRING NOT NULL,
+  payload STRING NOT NULL,
+  idempotency_key STRING,
+  status STRING NOT NULL,
+  created_at TIMESTAMP NOT NULL,
+  approved_at TIMESTAMP,
+  approved_by STRING,
+  executed_at TIMESTAMP,
+  result STRING
+)
+PARTITION BY DATE(created_at)
+CLUSTER BY status, action_name, requester;
