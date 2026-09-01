@@ -8,6 +8,14 @@ export type Source = {
   chunk_index: number;
   language: string;
   score: number;
+  metadata?: {
+    classification?: string;
+    retrieval?: {
+      confidence?: number;
+      rerank_score?: number;
+    };
+    [key: string]: unknown;
+  };
 };
 
 export type ChatResponse = {
