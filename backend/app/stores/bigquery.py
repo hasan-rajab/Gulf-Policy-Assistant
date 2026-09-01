@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 
 from google.cloud import bigquery
@@ -49,7 +51,7 @@ class BigQueryVectorStore(VectorStore):
             raise RuntimeError(f"BigQuery insert failed: {errors}")
 
     @staticmethod
-    def _access_parameters(access: AccessContext | None) -> list[bigquery.QueryParameter]:
+    def _access_parameters(access: AccessContext | None) -> list:
         access = access or AccessContext.create("internal-public-only")
         return [
             bigquery.ScalarQueryParameter("is_admin", "BOOL", access.is_admin),
