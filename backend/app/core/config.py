@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     bq_dataset: str = "enterprise_rag"
     bq_table: str = "policy_chunks"
     bq_audit_table: str = "audit_events"
+    bq_actions_table: str = "action_requests"
     bq_location: str = "US"
 
     retrieval_top_k: int = 5
@@ -70,6 +71,12 @@ class Settings(BaseSettings):
         if not self.google_cloud_project:
             raise ValueError("GOOGLE_CLOUD_PROJECT is required for BigQuery mode")
         return f"{self.google_cloud_project}.{self.bq_dataset}.{self.bq_audit_table}"
+
+    @property
+    def bq_actions_table_fqn(self) -> str:
+        if not self.google_cloud_project:
+            raise ValueError("GOOGLE_CLOUD_PROJECT is required for BigQuery mode")
+        return f"{self.google_cloud_project}.{self.bq_dataset}.{self.bq_actions_table}"
 
     @property
     def demo_accounts(self) -> dict[str, dict]:
