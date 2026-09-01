@@ -61,16 +61,19 @@ class BigQueryVectorStore(VectorStore):
 
     @staticmethod
     def _acl_predicate() -> str:
+        # IFNULL handles rows migrated from an older schema where the repeated
+        # ACL columns may still be NULL. Those rows remain public only when their
+        # visibility explicitly/defaults to public.
         return """
         (
           @is_admin
           OR COALESCE(visibility, 'public') = 'public'
           OR EXISTS (
-            SELECT 1 FROM UNNEST(allowed_roles) role
+            SELECT 1 FROM UNNEST(IFNULL(allowed_roles, ARRAY<STRING>[])) role
             WHERE role IN UNNEST(@roles)
           )
           OR EXISTS (
-            SELECT 1 FROM UNNEST(allowed_departments) department
+            SELECT 1 FROM UNNEST(IFNULL(allowed_departments, ARRAY<STRING>[])) department
             WHERE department IN UNNEST(@departments)
           )
         )
