@@ -99,3 +99,19 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         run: npm run build
+
+  infrastructure-validation:
+    name: Compose + deployment validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate deployment script syntax
+        run: bash -n infra/deploy.sh
+
+      - name: Validate Docker Compose configuration
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
