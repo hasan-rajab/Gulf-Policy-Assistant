@@ -42,8 +42,9 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${BACKEND_SA}@${PROJECT_ID}.iam.gserviceaccount.com" \
   --role="roles/bigquery.dataEditor" >/dev/null
 
-# Bootstrap/migrate the governed corpus schema. The separate vector-index DDL in
-# infra/bigquery.sql can be applied once corpus size justifies ANN search.
+# Bootstrap/migrate the governed corpus and workflow schema. The separate
+# vector-index DDL in infra/bigquery.sql can be applied once corpus size
+# justifies ANN search.
 bq --location="$BQ_LOCATION" --project_id="$PROJECT_ID" show "${PROJECT_ID}:enterprise_rag" >/dev/null 2>&1 || \
   bq --location="$BQ_LOCATION" --project_id="$PROJECT_ID" mk --dataset "${PROJECT_ID}:enterprise_rag"
 
@@ -63,7 +64,13 @@ bq --location="$BQ_LOCATION" --project_id="$PROJECT_ID" query --use_legacy_sql=f
    event_id STRING NOT NULL, timestamp TIMESTAMP NOT NULL, actor STRING NOT NULL,
    action STRING NOT NULL, resource STRING, outcome STRING NOT NULL, request_id STRING,
    details STRING, previous_hash STRING, event_hash STRING NOT NULL
- ) PARTITION BY DATE(timestamp) CLUSTER BY actor, action, outcome;"
+ ) PARTITION BY DATE(timestamp) CLUSTER BY actor, action, outcome;
+ CREATE TABLE IF NOT EXISTS \`${PROJECT_ID}.enterprise_rag.action_requests\` (
+   id STRING NOT NULL, requester STRING NOT NULL, action_name STRING NOT NULL,
+   payload STRING NOT NULL, idempotency_key STRING, status STRING NOT NULL,
+   created_at TIMESTAMP NOT NULL, approved_at TIMESTAMP, approved_by STRING,
+   executed_at TIMESTAMP, result STRING
+ ) PARTITION BY DATE(created_at) CLUSTER BY status, action_name, requester;"
 
 echo "Building backend..."
 gcloud builds submit backend --tag "$BACKEND_IMAGE" --project "$PROJECT_ID"
@@ -75,7 +82,7 @@ gcloud run deploy "$BACKEND_SERVICE" \
   --project "$PROJECT_ID" \
   --service-account "${BACKEND_SA}@${PROJECT_ID}.iam.gserviceaccount.com" \
   --no-allow-unauthenticated \
-  --set-env-vars "DEMO_MODE=false,AUTH_MODE=iap,VECTOR_BACKEND=bigquery,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=${VERTEX_LOCATION},BQ_DATASET=enterprise_rag,BQ_TABLE=policy_chunks,BQ_AUDIT_TABLE=audit_events,BQ_LOCATION=${BQ_LOCATION},GEMINI_MODEL=gemini-3-flash-preview,EMBEDDING_MODEL=gemini-embedding-001,EMBEDDING_DIMENSIONS=768,ACCESS_PROFILES_JSON={}" \
+  --set-env-vars "DEMO_MODE=false,AUTH_MODE=iap,VECTOR_BACKEND=bigquery,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=${VERTEX_LOCATION},BQ_DATASET=enterprise_rag,BQ_TABLE=policy_chunks,BQ_AUDIT_TABLE=audit_events,BQ_ACTIONS_TABLE=action_requests,BQ_LOCATION=${BQ_LOCATION},GEMINI_MODEL=gemini-3-flash-preview,EMBEDDING_MODEL=gemini-embedding-001,EMBEDDING_DIMENSIONS=768,ACCESS_PROFILES_JSON={}" \
   --memory 1Gi --cpu 1 --min 0 --max 10
 
 BACKEND_URL="$(gcloud run services describe "$BACKEND_SERVICE" --region "$REGION" --project "$PROJECT_ID" --format='value(status.url)')"
