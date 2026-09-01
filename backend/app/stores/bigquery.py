@@ -2,6 +2,7 @@ import json
 
 from google.cloud import bigquery
 
+from app.core.access import AccessContext
 from app.core.config import Settings
 from app.stores.base import SearchResult, StoredChunk, VectorStore
 
@@ -15,8 +16,6 @@ class BigQueryVectorStore(VectorStore):
     def upsert(self, chunks: list[StoredChunk]) -> None:
         if not chunks:
             return
-        # Prototype ingestion uses append-only chunk IDs. Re-ingesting the same
-        # document uses deterministic IDs and a DELETE first to avoid duplicates.
         doc_ids = sorted({c.document_id for c in chunks})
         delete_sql = f"DELETE FROM `{self.table}` WHERE document_id IN UNNEST(@doc_ids)"
         delete_job = self.client.query(
@@ -39,6 +38,9 @@ class BigQueryVectorStore(VectorStore):
                 "language": c.language,
                 "source_uri": c.source_uri,
                 "metadata": json.dumps(c.metadata, ensure_ascii=False),
+                "visibility": c.visibility,
+                "allowed_roles": c.allowed_roles,
+                "allowed_departments": c.allowed_departments,
             }
             for c in chunks
         ]
@@ -46,14 +48,51 @@ class BigQueryVectorStore(VectorStore):
         if errors:
             raise RuntimeError(f"BigQuery insert failed: {errors}")
 
-    def search(self, query_embedding: list[float], top_k: int) -> list[SearchResult]:
+    @staticmethod
+    def _access_parameters(access: AccessContext | None) -> list[bigquery.QueryParameter]:
+        access = access or AccessContext.create("internal-public-only")
+        return [
+            bigquery.ScalarQueryParameter("is_admin", "BOOL", access.is_admin),
+            bigquery.ArrayQueryParameter("roles", "STRING", sorted(access.roles)),
+            bigquery.ArrayQueryParameter("departments", "STRING", sorted(access.departments)),
+        ]
+
+    @staticmethod
+    def _acl_predicate() -> str:
+        return """
+        (
+          @is_admin
+          OR COALESCE(visibility, 'public') = 'public'
+          OR EXISTS (
+            SELECT 1 FROM UNNEST(allowed_roles) role
+            WHERE role IN UNNEST(@roles)
+          )
+          OR EXISTS (
+            SELECT 1 FROM UNNEST(allowed_departments) department
+            WHERE department IN UNNEST(@departments)
+          )
+        )
+        """
+
+    def search(
+        self,
+        query_embedding: list[float],
+        top_k: int,
+        access: AccessContext | None = None,
+    ) -> list[SearchResult]:
+        # ACL columns are stored in the vector index (see infra/bigquery.sql), so
+        # the base-table WHERE clause can be evaluated as a pre-filter before ANN.
         sql = f"""
         SELECT
           base.id, base.document_id, base.title, base.text, base.embedding,
           base.chunk_index, base.page, base.language, base.source_uri,
-          base.metadata, distance
+          base.metadata, base.visibility, base.allowed_roles,
+          base.allowed_departments, distance
         FROM VECTOR_SEARCH(
-          TABLE `{self.table}`,
+          (
+            SELECT * FROM `{self.table}`
+            WHERE {self._acl_predicate()}
+          ),
           'embedding',
           (SELECT @query_embedding AS embedding),
           'embedding',
@@ -65,6 +104,7 @@ class BigQueryVectorStore(VectorStore):
         params = [
             bigquery.ArrayQueryParameter("query_embedding", "FLOAT64", query_embedding),
             bigquery.ScalarQueryParameter("top_k", "INT64", top_k),
+            *self._access_parameters(access),
         ]
         rows = self.client.query(sql, job_config=bigquery.QueryJobConfig(query_parameters=params)).result()
         results: list[SearchResult] = []
@@ -81,19 +121,30 @@ class BigQueryVectorStore(VectorStore):
                 language=row.language,
                 source_uri=row.source_uri,
                 metadata=metadata,
+                visibility=row.visibility or "public",
+                allowed_roles=list(row.allowed_roles or []),
+                allowed_departments=list(row.allowed_departments or []),
             )
-            # COSINE distance: 0 means identical; convert to an intuitive 0..1 score.
             score = max(0.0, min(1.0, 1.0 - float(row.distance)))
             results.append(SearchResult(chunk=chunk, score=score))
         return results
 
-    def list_documents(self) -> list[dict]:
+    def list_documents(self, access: AccessContext | None = None) -> list[dict]:
         sql = f"""
         SELECT document_id, ANY_VALUE(title) title, COUNT(*) chunks,
                ANY_VALUE(source_uri) source_uri,
-               IF(COUNT(DISTINCT language) > 1, 'mixed', ANY_VALUE(language)) language
+               IF(COUNT(DISTINCT language) > 1, 'mixed', ANY_VALUE(language)) language,
+               ANY_VALUE(visibility) visibility
         FROM `{self.table}`
+        WHERE {self._acl_predicate()}
         GROUP BY document_id
         ORDER BY title
         """
-        return [dict(row.items()) for row in self.client.query(sql).result()]
+        params = self._access_parameters(access)
+        return [
+            dict(row.items())
+            for row in self.client.query(
+                sql,
+                job_config=bigquery.QueryJobConfig(query_parameters=params),
+            ).result()
+        ]
