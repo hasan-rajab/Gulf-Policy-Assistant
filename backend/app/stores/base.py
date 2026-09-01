@@ -32,6 +32,20 @@ class VectorStore(ABC):
     def search(self, query_embedding: list[float], top_k: int) -> list[SearchResult]:
         raise NotImplementedError
 
+    def hybrid_search(
+        self,
+        query_text: str,
+        query_embedding: list[float],
+        top_k: int,
+    ) -> list[SearchResult]:
+        """Hybrid retrieval hook.
+
+        Backends that support lexical retrieval can override this method and
+        fuse lexical + vector rankings. Other backends safely fall back to
+        vector search so the RAG service remains backend-agnostic.
+        """
+        return self.search(query_embedding, top_k)
+
     @abstractmethod
     def list_documents(self) -> list[dict]:
         raise NotImplementedError

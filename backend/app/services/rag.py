@@ -5,6 +5,7 @@ import structlog
 
 from app.core.config import Settings
 from app.models.schemas import ChatResponse, Source
+from app.services.agent import PolicyAgentOrchestrator
 from app.services.conversations import ConversationStore
 from app.services.embeddings import EmbeddingProvider
 from app.services.generation import Generator
@@ -28,6 +29,7 @@ class RAGService:
         self.store = store
         self.generator = generator
         self.conversations = conversations
+        self.agent = PolicyAgentOrchestrator()
 
     @staticmethod
     def _build_retrieval_query(query: str) -> str:
@@ -70,17 +72,18 @@ class RAGService:
         request_id = str(uuid4())
         cid = self.conversations.ensure(conversation_id, owner)
         history = self.conversations.get(cid, owner)
+        trace = self.agent.start(query)
 
         retrieval_query = self._build_retrieval_query(query)
         query_vector = self.embedder.embed_query(retrieval_query)
         k = top_k or self.settings.retrieval_top_k
-        raw_results = self.store.search(query_vector, k)
-        # Always retain the strongest result for demo visibility, but mark the
-        # response ungrounded if it does not clear the configured threshold.
+        raw_results = self.store.hybrid_search(retrieval_query, query_vector, k)
         results = [r for r in raw_results if r.score >= self.settings.min_relevance_score]
         grounded = bool(results)
+        self.agent.record_retrieval(trace, len(results))
 
         if not results:
+            self.agent.record_fallback(trace)
             lang = detect_language(query)
             answer = (
                 "لا أستطيع تأكيد الإجابة من المعلومات الداخلية المعتمدة المتاحة. يرجى الرجوع إلى مالك السياسة أو الموارد البشرية."
@@ -90,6 +93,7 @@ class RAGService:
             sources: list[Source] = []
         else:
             answer = self.generator.generate(query, history, results)
+            self.agent.record_generation(trace)
             sources = [
                 Source(
                     source_id=f"S{i}",
@@ -119,8 +123,10 @@ class RAGService:
             retrieved=len(results),
             grounded=grounded,
             latency_ms=latency_ms,
+            retrieval_mode="hybrid",
             vector_backend=self.settings.vector_backend,
             model="demo-deterministic" if self.settings.demo_mode else self.settings.gemini_model,
+            agent_trace=trace.as_dict(),
         )
 
         return ChatResponse(
