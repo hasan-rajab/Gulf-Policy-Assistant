@@ -191,7 +191,7 @@ The controlled eight-case evaluation reported 1.000 on:
 - language match rate;
 - grounded keyword coverage.
 
-Average deterministic local latency recorded for that controlled evaluation was **2.125 ms**.
+Average deterministic local latency recorded for that controlled evaluation was **2.0 ms**.
 
 These results validate expected behavior on the bundled fictional corpus. They do **not** represent production accuracy, security guarantees, or real-enterprise latency.
 
