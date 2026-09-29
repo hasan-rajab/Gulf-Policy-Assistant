@@ -1,27 +1,58 @@
 # Verified results
 
-This document records the measured results captured during the project validation on 12 August 2026.
+This document records the strongest repository-backed validation evidence for NEXUS.
 
-## Verified local evaluation summary
+## Current reference validation
 
-- 5 passed
-- total_cases: 8
-- retrieval_hit_at_k: 1.0
-- citation_rate: 1.0
-- grounding_decision_accuracy: 1.0
-- language_match_rate: 1.0
-- grounded_keyword_coverage: 1.0
+**GitHub Actions:** NEXUS CI — run #59  
+**Date:** 1 September 2026  
+**Commit:** `b7da2a70ac37c43f1d270e1a52c16fb060084f1d`  
+**Workflow conclusion:** success
 
-## Persistence validation
+### Backend and security tests
 
-The following behavior was explicitly validated after restarting the backend:
+```text
+14 passed in 1.19s
+```
 
-- English cybersecurity question: correct answer with 30-minute reporting requirement
-- Arabic cybersecurity question: correct answer with 30-minute reporting requirement
-- answer was grounded using a single approved citation
-- the policy document remained visible in the document list after restart
-- both backend and frontend containers remained running and healthy
+### Strict RAG evaluation
 
-## Important distinction
+The workflow ran a controlled **8-case** evaluation set and passed its strict metric gate.
 
-The values above are measured results from this repository's local demo environment and evaluation set. They are not a claim that a production bank deployment has been approved, scaled, or certified. The production architecture described elsewhere in this repository is a future implementation path that must be validated against the customer's corpus, security requirements, procurement controls, and operating model.
+| Metric | Result |
+|---|---:|
+| total_cases | 8 |
+| retrieval_hit_at_k | 1.0 |
+| citation_rate | 1.0 |
+| citation_source_integrity_rate | 1.0 |
+| grounding_decision_accuracy | 1.0 |
+| language_match_rate | 1.0 |
+| grounded_keyword_coverage | 1.0 |
+| avg_latency_ms | 2.0 |
+
+The same CI run also completed:
+
+- frontend production build — success;
+- Docker Compose / deployment validation — success.
+
+## What these results establish
+
+They show that the controlled fictional corpus and deterministic evaluation suite behaved as expected at the pinned commit, including retrieval, citation integrity, grounding decisions, language matching, and the tested security/backend behaviors.
+
+## What these results do **not** establish
+
+They are **not** evidence of:
+
+- production-bank accuracy;
+- production latency;
+- regulatory approval or certification;
+- safety across unseen enterprise data;
+- security against all adversarial attacks;
+- business ROI;
+- autonomous production tool execution.
+
+A real enterprise pilot would require a materially larger representative golden set, customer-specific access rules, production identity integration, security/red-team testing, operational monitoring, and explicit go/no-go thresholds.
+
+## Historical note
+
+An older local-results note in this file previously referenced August validation. This section supersedes it with the stronger, traceable September CI run so portfolio claims point to one reproducible reference.
