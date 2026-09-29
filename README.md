@@ -12,6 +12,27 @@ The system therefore treats **identity → authorization → retrieval → groun
 
 ---
 
+## Flagship AI consulting case study
+
+NEXUS is presented as both a working engineering reference and a **fictional enterprise AI consulting engagement**. The consulting layer shows how I would move from business discovery to architecture, risk treatment, economics, pilot design, and phased implementation.
+
+| Consulting deliverable | Purpose |
+|---|---|
+| [Executive Case Study](docs/EXECUTIVE_CASE_STUDY.md) | Situation, options, recommendation, architecture, controls, and executive conclusion |
+| [Illustrative Business Case](docs/ILLUSTRATIVE_BUSINESS_CASE.md) | ROI logic, capacity-value model, payback illustration, and sensitivity analysis |
+| [AI Risk Register](docs/AI_RISK_REGISTER.md) | Enterprise GenAI risks, existing controls, and production follow-ups |
+| [Implementation Roadmap](docs/IMPLEMENTATION_ROADMAP.md) | Discovery → read-only pilot → department copilot → production hardening → controlled actions |
+| [Verified Results](docs/VERIFIED_RESULTS.md) | Repository-backed validation evidence and claims boundaries |
+| [Career Case Study](docs/CAREER_CASE_STUDY.md) | Recruiter/interview explanation and defensible engineering decisions |
+
+### Executive recommendation
+
+For a regulated enterprise, I would **not** begin with an autonomous agent. I would first prove trusted knowledge access: correct identity, pre-retrieval authorization, sufficient evidence, reliable citations, explicit abstention, and auditability. Only after those controls and business KPIs are demonstrated would I expand into approval-gated actions.
+
+> The customer scenario and financial assumptions in the consulting documents are fictional portfolio material. Verified technical results remain explicitly separated from illustrative business outcomes.
+
+---
+
 ## What NEXUS demonstrates
 
 ### Enterprise RAG
