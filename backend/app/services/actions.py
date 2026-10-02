@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 import threading
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -10,6 +12,17 @@ from uuid import uuid4
 
 from app.core.access import AccessContext
 from app.services.audit import AuditStore
+
+
+def _contains_unsafe_text_control(value: str) -> bool:
+    # Human-reviewed action text may contain ordinary newlines/tabs, but not
+    # invisible/bidirectional format controls or other control characters that
+    # can spoof reviewer-visible text or downstream logs.
+    allowed_controls = {"\n", "\r", "\t"}
+    return any(
+        ch not in allowed_controls and unicodedata.category(ch) in {"Cc", "Cf"}
+        for ch in value
+    )
 
 
 ACTION_REGISTRY = {
@@ -35,8 +48,9 @@ class EnterpriseActionService:
     """Allowlisted, approval-gated enterprise action execution.
 
     This deliberately does not allow arbitrary URLs, shell commands, SQL, or
-    model-generated tool names. Every action is registered and schema-checked,
-    and execution requires a separate administrator approval state transition.
+    model-generated tool names. Every action is registered and schema-checked.
+    Execution requires a separate administrator approval transition, and the
+    requester cannot approve their own request.
     """
 
     def __init__(self, path: Path, audit: AuditStore):
@@ -82,11 +96,37 @@ class EnterpriseActionService:
         for key, value in payload.items():
             if not isinstance(value, (str, int, float, bool)):
                 raise ValueError(f"Field '{key}' must be a scalar value")
+            if isinstance(value, float) and not math.isfinite(value):
+                raise ValueError(f"Field '{key}' must be a finite numeric value")
             text = str(value).strip()
             if not text or len(text) > 2000:
                 raise ValueError(f"Field '{key}' is empty or too long")
+            if _contains_unsafe_text_control(text):
+                raise ValueError(f"Field '{key}' contains unsafe control/format characters")
             clean[key] = text
         return clean
+
+    def _record_denial(
+        self,
+        *,
+        actor: str,
+        action: str,
+        action_id: str,
+        request_id: str | None,
+        reason: str,
+        status_value: str | None = None,
+    ) -> None:
+        details: dict[str, Any] = {"reason": reason}
+        if status_value is not None:
+            details["current_status"] = status_value
+        self.audit.record(
+            actor=actor,
+            action=action,
+            resource=action_id,
+            outcome="denied",
+            request_id=request_id,
+            details=details,
+        )
 
     def request(
         self,
@@ -98,8 +138,14 @@ class EnterpriseActionService:
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         clean = self._validate_payload(action_name, payload)
-        if idempotency_key and len(idempotency_key) > 128:
-            raise ValueError("Idempotency key is too long")
+        if idempotency_key is not None:
+            idempotency_key = idempotency_key.strip()
+            if not idempotency_key:
+                raise ValueError("Idempotency key cannot be blank")
+            if len(idempotency_key) > 128:
+                raise ValueError("Idempotency key is too long")
+            if _contains_unsafe_text_control(idempotency_key):
+                raise ValueError("Idempotency key contains unsafe control/format characters")
 
         with self._lock:
             if idempotency_key:
@@ -108,6 +154,17 @@ class EnterpriseActionService:
                     (principal.email, idempotency_key),
                 ).fetchone()
                 if existing:
+                    existing_payload = json.loads(existing["payload"])
+                    if existing["action_name"] != action_name or existing_payload != clean:
+                        self._record_denial(
+                            actor=principal.email,
+                            action="enterprise_action_request_rejected",
+                            action_id=existing["id"],
+                            request_id=request_id,
+                            reason="idempotency_key_conflict",
+                            status_value=existing["status"],
+                        )
+                        raise ValueError("Idempotency key conflict: key was already used for a different request")
                     return self._row_to_dict(existing)
 
             action_id = str(uuid4())
@@ -146,7 +203,15 @@ class EnterpriseActionService:
         request_id: str | None,
     ) -> dict[str, Any]:
         if not approver.is_admin:
+            self._record_denial(
+                actor=approver.email,
+                action="enterprise_action_approval_attempt",
+                action_id=action_id,
+                request_id=request_id,
+                reason="insufficient_privilege",
+            )
             raise PermissionError("Knowledge administrator permission required")
+
         with self._lock:
             row = self._connection.execute(
                 "SELECT * FROM action_requests WHERE id=?",
@@ -154,8 +219,29 @@ class EnterpriseActionService:
             ).fetchone()
             if row is None:
                 raise KeyError(action_id)
+
+            if row["requester"].lower() == approver.email.lower():
+                self._record_denial(
+                    actor=approver.email,
+                    action="enterprise_action_approval_attempt",
+                    action_id=action_id,
+                    request_id=request_id,
+                    reason="self_approval_prohibited",
+                    status_value=row["status"],
+                )
+                raise PermissionError("Requester cannot approve their own action")
+
             if row["status"] != "pending_approval":
+                self._record_denial(
+                    actor=approver.email,
+                    action="enterprise_action_approval_attempt",
+                    action_id=action_id,
+                    request_id=request_id,
+                    reason="invalid_state_transition",
+                    status_value=row["status"],
+                )
                 raise ValueError(f"Action cannot be approved from status {row['status']}")
+
             approved_at = datetime.now(timezone.utc).isoformat()
             self._connection.execute(
                 """
@@ -184,7 +270,15 @@ class EnterpriseActionService:
         request_id: str | None,
     ) -> dict[str, Any]:
         if not executor.is_admin:
+            self._record_denial(
+                actor=executor.email,
+                action="enterprise_action_execution_attempt",
+                action_id=action_id,
+                request_id=request_id,
+                reason="insufficient_privilege",
+            )
             raise PermissionError("Knowledge administrator permission required")
+
         with self._lock:
             row = self._connection.execute(
                 "SELECT * FROM action_requests WHERE id=?",
@@ -192,7 +286,41 @@ class EnterpriseActionService:
             ).fetchone()
             if row is None:
                 raise KeyError(action_id)
+
+            if row["status"] == "approved":
+                approved_by = str(row["approved_by"] or "").strip().lower()
+                approved_at = str(row["approved_at"] or "").strip()
+                if not approved_by or not approved_at or approved_by == row["requester"].lower():
+                    self._record_denial(
+                        actor=executor.email,
+                        action="enterprise_action_execution_attempt",
+                        action_id=action_id,
+                        request_id=request_id,
+                        reason="invalid_approval_metadata",
+                        status_value=row["status"],
+                    )
+                    raise ValueError("Action approval metadata is invalid")
+
+            if row["requester"].lower() == executor.email.lower():
+                self._record_denial(
+                    actor=executor.email,
+                    action="enterprise_action_execution_attempt",
+                    action_id=action_id,
+                    request_id=request_id,
+                    reason="requester_execution_prohibited",
+                    status_value=row["status"],
+                )
+                raise PermissionError("Requester cannot execute their own action")
+
             if row["status"] != "approved":
+                self._record_denial(
+                    actor=executor.email,
+                    action="enterprise_action_execution_attempt",
+                    action_id=action_id,
+                    request_id=request_id,
+                    reason="approval_required",
+                    status_value=row["status"],
+                )
                 raise ValueError(f"Action cannot execute from status {row['status']}")
 
             result = {

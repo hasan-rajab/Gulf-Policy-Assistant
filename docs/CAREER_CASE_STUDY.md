@@ -2,21 +2,23 @@
 
 ## One-line explanation
 
-NEXUS is a governed Arabic/English enterprise RAG system where identity, retrieval authorization, evidence grounding, action approval, and audit are designed as one security boundary.
+NEXUS is a governed Arabic/English enterprise RAG and technology-assurance case study where identity, retrieval authorization, evidence grounding, human approval, segregation of duties, auditability, and AI evaluation are designed as one control environment.
 
 ## 30-second recruiter version
 
-I built NEXUS to solve the enterprise problem behind RAG: an LLM should only retrieve information the authenticated employee is allowed to see and should never treat generated text as permission to execute a business action. NEXUS enforces document ACLs before retrieval scoring, uses hybrid retrieval and reranking, abstains when evidence is insufficient, audits access and decisions, and puts enterprise actions behind an approval-gated state machine.
+I built NEXUS to solve the enterprise problem behind RAG: an LLM should only retrieve information an authenticated employee is allowed to see, and generated text should never become authority to execute a business action. NEXUS enforces document ACLs before retrieval scoring, uses grounded evidence and citations, abstains when evidence is insufficient, and puts enterprise actions behind allowlisted, approval-gated workflows. I then extended the project into a technology-assurance case with a risk/control matrix, GITC and application-control testing, four-eyes approval, audit analytics, workpapers, and an executable 20-control assurance review.
 
 ## 90-second interview version
 
 The system started as a bilingual policy assistant, but I redesigned it around enterprise authorization. The critical rule is that access control happens before semantic or lexical scoring. In local mode, unauthorized chunks are removed from the candidate corpus before retrieval. The BigQuery path carries roles, departments, and visibility metadata into the vector-search base query.
 
-After retrieval, NEXUS fuses semantic and lexical candidates, applies deterministic reranking, and uses a separate evidence threshold for grounding. If approved evidence is not strong enough, it abstains instead of improvising an answer. I added citation-to-source integrity checks so generated citations must map to evidence that was actually returned.
+After retrieval, NEXUS fuses semantic and lexical candidates, applies deterministic reranking, and uses a separate evidence threshold for grounding. If approved evidence is not strong enough, it abstains instead of improvising an answer. Citation-to-source integrity checks verify that generated citations map to evidence actually returned by the retrieval path.
 
-For side effects, I separated the action plane from the answer plane. Only allowlisted actions with strict schemas can be requested. They move through `pending_approval -> approved -> executed`, require administrator approval, enforce idempotency, and are auditable. The portfolio executor produces a controlled handoff reference rather than pretending a real HR or IT integration exists.
+For side effects, I separated the action plane from the answer plane. Only allowlisted actions with strict schemas can be requested. They move through `pending_approval -> approved -> executed`, use idempotency, and now enforce a four-eyes rule: the requester cannot approve their own action, even if privileged. Denied approval and execution attempts are also recorded as structured audit events.
 
-The project also has a tamper-evident local audit chain, a BigQuery audit path, security regression tests, a deterministic bilingual RAG evaluation suite, Dockerized deployment, and CI gates for backend/security tests, frontend build, and deployment validation.
+I then treated the system as a technology-assurance subject. I documented risks and control objectives, separated design effectiveness from operating effectiveness, created workpapers, mapped GITC and IT application-control themes, and wrote deterministic analytics for self-approval, execution-without-approval, and repeated denied-login exceptions. The CI pipeline executes an assurance review rather than merely documenting the controls.
+
+I then added a deterministic 1,000-case escalating adversarial campaign. Its first run deliberately went red: **300/1,000 cases failed**, exposing three additional weaknesses around Unicode control characters and non-finite audit evidence. After remediation and targeted regression tests, NEXUS CI run #82 validated **47/47 regression tests**, **1,000/1,000 campaign cases**, the controlled eight-case RAG gate, and a separate **20/20 technology-assurance control review**.
 
 ## Architecture story
 
@@ -35,81 +37,128 @@ separate action plane:
 request
   -> allowlist + schema
   -> pending approval
-  -> admin approval
+  -> independent authorized approver
+  -> no self-approval / four-eyes
   -> guarded execution
   -> audited handoff reference
+
+assurance layer:
+risk
+  -> control objective
+  -> design assessment
+  -> test procedure
+  -> evidence
+  -> exception analysis
+  -> conclusion
 ```
 
-## Engineering problems I can defend in an interview
+## Technology-assurance problems I can defend
 
 ### 1. Retrieval-time authorization
-**Problem:** retrieving restricted chunks and filtering them afterward can leak sensitive text into context, reranking, traces, or caches.
 
-**Fix:** scope the corpus to authorized chunks before semantic or lexical scoring.
+**Risk:** restricted text can leak into candidate generation, traces, caches, reranking, or model context if filtering happens too late.
 
-**Lesson:** RAG authorization must be part of retrieval, not a presentation-layer filter.
+**Control:** scope the corpus to authorized chunks before semantic or lexical scoring.
 
-### 2. Ranking vs grounding
-**Problem:** the highest-ranked result is not automatically strong enough evidence to answer.
+**Testing:** negative test as an unauthorized operations user plus positive test as an authorized HR principal.
 
-**Fix:** keep retrieval confidence separate from rerank ordering and apply an explicit evidence gate before generation.
+### 2. Design effectiveness vs operating effectiveness
 
-**Lesson:** ranking quality and answer permission are different decisions.
+**Design effectiveness:** if the control operates as designed, is it capable of addressing the risk?
+
+**Operating effectiveness:** did it actually operate as designed for the transactions/population tested?
+
+NEXUS documents the design and then re-performs controls through deterministic tests. The project explicitly does not turn a demo test population into a production-period audit conclusion.
 
 ### 3. LLM output vs action authority
-**Problem:** a generated recommendation must not become authorization to mutate an enterprise system.
 
-**Fix:** separate the side-effect plane, enforce an allowlist/schema, require approval, use idempotency, and audit every transition.
+**Risk:** generated output becomes implicit authorization to mutate an enterprise system.
 
-**Lesson:** tool use needs workflow governance, not just function calling.
+**Control:** separate the side-effect plane, enforce allowlists/schemas, require approval, and use persisted state transitions.
 
-### 4. Audit integrity
-**Problem:** a local audit log is weak if rows can be changed without detection.
+**Testing:** attempt execution before approval and confirm deterministic denial.
 
-**Fix:** chain audit events using `previous_hash -> event_hash` and expose verification that detects stored-row tampering.
+### 4. Segregation of duties
+
+**Risk:** a privileged requester approves their own action.
+
+**Control:** requester identity cannot equal approver identity.
+
+**Testing:** create a request as an administrator and deliberately attempt administrator self-approval; the request is denied and the denial is audited.
+
+### 5. Processing integrity / replay
+
+**Risk:** repeated requests create duplicate side effects.
+
+**Control:** requester + idempotency key identifies the existing request.
+
+**Testing:** submit the same request twice and confirm both references resolve to the same action.
+
+### 6. Audit integrity
+
+**Risk:** historical audit evidence is changed without detection.
+
+**Control:** local events use a SHA-256 hash chain.
+
+**Testing:** verify a valid chain, modify a stored event in a disposable database, then confirm verification fails.
+
+### 7. Continuous control analytics
+
+**Risk:** invalid approval/execution sequences exist without reviewer visibility.
+
+**Control:** deterministic audit analytics identify self-approval, execution without recorded approval, and repeated denied logins.
+
+**Testing:** run both clean and intentionally invalid event sequences and inspect exact exception types.
+
+### 8. Change management
+
+**Risk:** code changes bypass quality/security assurance.
+
+**Control:** GitHub Actions gates backend/security tests, strict AI evaluation, the technology-assurance review, frontend build, and deployment-configuration checks.
+
+**Limitation:** CODEOWNERS and a control-impact PR template are repository artifacts; branch-protection/reviewer enforcement is a separate GitHub setting and is not claimed as active unless configured.
+
+### 9. AI assurance
+
+**Risk:** the system answers unsupported questions, loses citation integrity, or follows adversarial instructions.
+
+**Control:** evidence gating, abstention, citation checks, bilingual evaluation, and adversarial regression testing.
+
+**Evidence:** run #82 retained all eight controlled evaluation metrics at 1.0; average deterministic local evaluation latency was 1.25 ms.
 
 ## Evidence
 
 - Arabic/English hybrid RAG
-- semantic + lexical retrieval
-- reciprocal-rank fusion
-- deterministic reranking
-- retrieval-time ACLs
+- semantic + lexical retrieval and reciprocal-rank fusion
+- deterministic reranking and evidence sufficiency
+- retrieval-time role/department ACLs
 - server-side entitlement resolution
-- grounded abstention
-- citation-to-source integrity checks
-- approval-gated controlled actions
-- idempotency
-- tamper-evident audit chain
+- grounded abstention and citation-to-source integrity
+- allowlisted and schema-validated controlled actions
+- four-eyes segregation of duties
+- idempotency / replay prevention
+- denied approval/execution audit evidence
+- tamper-evident SQLite audit chain
+- deterministic audit exception analytics
 - SQLite + BigQuery persistence paths
+- risk/control matrix and assurance workpapers
+- design-effectiveness and operating-effectiveness methodology
+- GITC / ITAC / AI-assurance relevance mapping
 - FastAPI + Next.js
 - Docker + GitHub Actions
-- 14/14 backend/security tests and deterministic 8-case RAG regression suite on the fictional corpus
-
-## Strong interview questions this project answers
-
-**Why is post-retrieval filtering insufficient?**  
-Because unauthorized text may already have entered candidate generation, scoring, logs, traces, caches, or model context. Pre-filtering shrinks the searchable corpus to information the principal is permitted to access.
-
-**Why use deterministic reranking instead of another LLM?**  
-For a compact governance-focused reference system, deterministic scoring keeps behavior inspectable, reproducible, inexpensive, and easy to regression-test. A learned reranker could replace it later without changing the authorization contract.
-
-**How do you handle prompt injection?**  
-The policy pipeline treats retrieved enterprise evidence and system rules as authoritative, rejects unsupported instructions, and includes adversarial cases in the regression evaluation. Prompt defenses are combined with authorization and grounding rather than treated as a prompt-only problem.
-
-**What would change for a real enterprise?**  
-Integrate enterprise IAM/SSO, managed secret storage, real document lifecycle/governance, production vector infrastructure, tenant isolation, centralized audit retention, DLP, red-team testing, and real approval/workflow adapters.
-
-**Biggest limitation?**  
-The bundled corpus is fictional and small. Perfect deterministic regression scores demonstrate expected behavior on that suite, not real enterprise accuracy or security guarantees.
+- **Earlier adversarial rounds exposed 18 failing test cases across 12 documented findings before remediation**
+- **A later 1,000-case escalating campaign initially produced 300 failures across 3 additional finding classes**
+- **47/47 regression tests and 1,000/1,000 campaign cases passed in CI run #82 after remediation**
+- **20/20 executable assurance controls passed**
+- **8/8 controlled RAG evaluation cases passed their regression gate**
 
 ## CV-ready bullets
 
-- Engineered a governed Arabic/English enterprise RAG platform with hybrid retrieval, deterministic reranking, grounded abstention, and citation-to-source integrity checks.
-- Implemented retrieval-time role/department ACL enforcement so restricted content is removed before semantic and lexical scoring.
-- Built approval-gated, idempotent enterprise action workflows with strict tool schemas and tamper-evident audit logging.
-- Added 14 backend/security regression tests, an 8-case bilingual RAG evaluation gate, Dockerized deployment, and CI validation for backend, frontend, and infrastructure paths.
+- Engineered a governed Arabic/English enterprise RAG platform with retrieval-time authorization, hybrid retrieval, deterministic reranking, grounded abstention, and citation-to-source integrity controls.
+- Designed and tested GITC/IT application-control patterns across logical access, approval workflows, segregation of duties, replay prevention, audit integrity, change-management gates, and AI assurance.
+- Implemented four-eyes approval, idempotent allowlisted actions, tamper-evident audit logging, and deterministic exception analytics for self-approval and unauthorized workflow transitions.
+- Built a **1,000-case escalating adversarial assurance campaign**; the first run exposed **300 failing cases** across three new control-evidence weaknesses, which were remediated before rerunning **1,000/1,000 cases**, **47/47 regression tests**, and a **20/20 executable assurance control review** successfully.
 
 ## Claims boundary
 
-The evaluation uses a deterministic fictional policy corpus. NEXUS demonstrates production-oriented architecture and control design; it is not a claim of deployment inside a real enterprise or of autonomous production tool execution.
+NEXUS demonstrates production-oriented architecture, control design, and reproducible portfolio assurance testing on a fictional corpus. It is not a claim of client employment, production deployment, formal SOC/SOX/ISAE assurance, ERP/ICFR audit experience, or operating effectiveness across a real audit period.

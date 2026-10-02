@@ -13,8 +13,10 @@ The register below maps major enterprise GenAI risks to controls already demonst
 | Citation mismatch | False confidence and poor auditability | High | Citation-to-returned-source integrity checks | Page/section-level provenance and document version tracking |
 | Prompt injection | Policy bypass or unsafe model behavior | High | Controlled orchestration, evidence boundaries, adversarial regression case | Dedicated red-team program, content isolation, vendor/model hardening |
 | Excessive agent authority | Unauthorized side effect | Critical | Separate action plane, allowlist, schemas, human approval | Fine-grained tool entitlements and enterprise workflow adapters |
+| Privileged self-approval | Requester bypasses independent authorization | High | Four-eyes rule blocks requester from approving own action; denial is audited | Enterprise SoD matrix, compensating controls, periodic privileged-access review |
 | Duplicate/replayed action | Repeated side effect | High | Idempotency and guarded workflow state transitions | Distributed locking / transactional integration where required |
 | Audit tampering | Inability to reconstruct decisions | High | SHA-256 hash-chained local audit trail | Centralized immutable retention / SIEM integration |
+| Hidden workflow exception | Invalid approval/execution sequence goes unnoticed | High | Deterministic audit analytics for self-approval, execution without recorded approval, and repeated denied logins | SIEM/CCM integration, alert ownership, investigation SLAs |
 | Stale policy content | Correctly grounded but outdated answer | High | Source provenance and explicit ingestion pipeline | Document-owner SLAs, version/expiry metadata, freshness monitoring |
 | Weak bilingual retrieval | Poor Arabic or English service quality | Medium–High | Bilingual evaluation and language matching | Broader Arabic varieties and domain-specific evaluation |
 | Overconfidence from small eval set | False production-readiness conclusion | High | Explicit claims boundary; deterministic controlled suite only | 50–100+ representative pilot questions, red-team and live shadow testing |

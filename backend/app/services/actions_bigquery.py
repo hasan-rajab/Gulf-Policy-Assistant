@@ -9,7 +9,7 @@ from google.cloud import bigquery
 
 from app.core.access import AccessContext
 from app.core.config import Settings
-from app.services.actions import EnterpriseActionService
+from app.services.actions import EnterpriseActionService, _contains_unsafe_text_control
 from app.services.audit import AuditStore
 
 
@@ -37,6 +37,28 @@ class BigQueryEnterpriseActionService:
             job_config=bigquery.QueryJobConfig(query_parameters=params or []),
         )
 
+    def _record_denial(
+        self,
+        *,
+        actor: str,
+        action: str,
+        action_id: str,
+        request_id: str | None,
+        reason: str,
+        status_value: str | None = None,
+    ) -> None:
+        details: dict[str, Any] = {"reason": reason}
+        if status_value is not None:
+            details["current_status"] = status_value
+        self.audit.record(
+            actor=actor,
+            action=action,
+            resource=action_id,
+            outcome="denied",
+            request_id=request_id,
+            details=details,
+        )
+
     def request(
         self,
         *,
@@ -47,8 +69,14 @@ class BigQueryEnterpriseActionService:
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         clean = EnterpriseActionService._validate_payload(action_name, payload)
-        if idempotency_key and len(idempotency_key) > 128:
-            raise ValueError("Idempotency key is too long")
+        if idempotency_key is not None:
+            idempotency_key = idempotency_key.strip()
+            if not idempotency_key:
+                raise ValueError("Idempotency key cannot be blank")
+            if len(idempotency_key) > 128:
+                raise ValueError("Idempotency key is too long")
+            if _contains_unsafe_text_control(idempotency_key):
+                raise ValueError("Idempotency key contains unsafe control/format characters")
 
         action_id = str(uuid4())
         created_at = datetime.now(timezone.utc)
@@ -89,6 +117,18 @@ class BigQueryEnterpriseActionService:
         if row is None:
             raise RuntimeError("Action request was not persisted")
 
+        if row["id"] != action_id:
+            if row["action_name"] != action_name or row["payload"] != clean:
+                self._record_denial(
+                    actor=principal.email,
+                    action="enterprise_action_request_rejected",
+                    action_id=row["id"],
+                    request_id=request_id,
+                    reason="idempotency_key_conflict",
+                    status_value=row["status"],
+                )
+                raise ValueError("Idempotency key conflict: key was already used for a different request")
+
         if row["id"] == action_id:
             self.audit.record(
                 actor=principal.email,
@@ -107,11 +147,39 @@ class BigQueryEnterpriseActionService:
         request_id: str | None,
     ) -> dict[str, Any]:
         if not approver.is_admin:
+            self._record_denial(
+                actor=approver.email,
+                action="enterprise_action_approval_attempt",
+                action_id=action_id,
+                request_id=request_id,
+                reason="insufficient_privilege",
+            )
             raise PermissionError("Knowledge administrator permission required")
+
         row = self._find(action_id)
         if row is None:
             raise KeyError(action_id)
+
+        if row["requester"].lower() == approver.email.lower():
+            self._record_denial(
+                actor=approver.email,
+                action="enterprise_action_approval_attempt",
+                action_id=action_id,
+                request_id=request_id,
+                reason="self_approval_prohibited",
+                status_value=row["status"],
+            )
+            raise PermissionError("Requester cannot approve their own action")
+
         if row["status"] != "pending_approval":
+            self._record_denial(
+                actor=approver.email,
+                action="enterprise_action_approval_attempt",
+                action_id=action_id,
+                request_id=request_id,
+                reason="invalid_state_transition",
+                status_value=row["status"],
+            )
             raise ValueError(f"Action cannot be approved from status {row['status']}")
 
         approved_at = datetime.now(timezone.utc)
@@ -150,11 +218,53 @@ class BigQueryEnterpriseActionService:
         request_id: str | None,
     ) -> dict[str, Any]:
         if not executor.is_admin:
+            self._record_denial(
+                actor=executor.email,
+                action="enterprise_action_execution_attempt",
+                action_id=action_id,
+                request_id=request_id,
+                reason="insufficient_privilege",
+            )
             raise PermissionError("Knowledge administrator permission required")
+
         row = self._find(action_id)
         if row is None:
             raise KeyError(action_id)
+
+        if row["status"] == "approved":
+            approved_by = str(row["approved_by"] or "").strip().lower()
+            approved_at = str(row["approved_at"] or "").strip()
+            if not approved_by or not approved_at or approved_by == row["requester"].lower():
+                self._record_denial(
+                    actor=executor.email,
+                    action="enterprise_action_execution_attempt",
+                    action_id=action_id,
+                    request_id=request_id,
+                    reason="invalid_approval_metadata",
+                    status_value=row["status"],
+                )
+                raise ValueError("Action approval metadata is invalid")
+
+        if row["requester"].lower() == executor.email.lower():
+            self._record_denial(
+                actor=executor.email,
+                action="enterprise_action_execution_attempt",
+                action_id=action_id,
+                request_id=request_id,
+                reason="requester_execution_prohibited",
+                status_value=row["status"],
+            )
+            raise PermissionError("Requester cannot execute their own action")
+
         if row["status"] != "approved":
+            self._record_denial(
+                actor=executor.email,
+                action="enterprise_action_execution_attempt",
+                action_id=action_id,
+                request_id=request_id,
+                reason="approval_required",
+                status_value=row["status"],
+            )
             raise ValueError(f"Action cannot execute from status {row['status']}")
 
         result = {

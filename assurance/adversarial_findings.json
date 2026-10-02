@@ -1,0 +1,171 @@
+{
+  "review": "NEXUS adversarial assurance challenge log",
+  "scope": "Self-built portfolio system; findings are development/control-design exceptions, not client audit findings.",
+  "method": "New negative/adversarial tests were intentionally added before remediation so CI could demonstrate which control assumptions failed. A later deterministic campaign added 1,000 cases with difficulty scores 1..1000; every later case contained one additional benign audit-event distractor while control families rotated across ten assurance domains.",
+  "findings": [
+    {
+      "id": "ADV-01",
+      "finding": "A reused idempotency key could silently return the original request even when the caller changed the action or payload.",
+      "discovery_run": 65,
+      "evidence": [
+        "test_idempotency_key_reuse_with_changed_payload_is_rejected_and_audited",
+        "test_idempotency_key_reuse_for_different_action_is_rejected"
+      ],
+      "remediation": "Reject conflicting reuse, record idempotency_key_conflict, and preserve identical-request replay behavior.",
+      "status": "remediated"
+    },
+    {
+      "id": "ADV-02",
+      "finding": "A privileged requester could execute their own action after another administrator approved it.",
+      "discovery_run": 65,
+      "evidence": [
+        "test_privileged_requester_cannot_execute_own_action_after_independent_approval"
+      ],
+      "remediation": "Prohibit requester execution and audit requester_execution_prohibited.",
+      "status": "remediated"
+    },
+    {
+      "id": "ADV-03",
+      "finding": "Non-finite numeric payload values (NaN and infinities) were accepted by scalar validation.",
+      "discovery_run": 65,
+      "evidence": [
+        "test_nonfinite_numeric_payload_values_are_rejected"
+      ],
+      "remediation": "Require finite numeric values before persistence.",
+      "status": "remediated"
+    },
+    {
+      "id": "ADV-04",
+      "finding": "Whitespace-only idempotency keys were treated as if no idempotency control had been requested.",
+      "discovery_run": 65,
+      "evidence": [
+        "test_blank_idempotency_key_is_rejected"
+      ],
+      "remediation": "Normalize and reject blank idempotency keys.",
+      "status": "remediated"
+    },
+    {
+      "id": "ADV-05",
+      "finding": "Audit analytics did not flag approval events with no prior request in the analyzed sequence.",
+      "discovery_run": 65,
+      "evidence": [
+        "test_audit_analytics_flags_approval_without_request"
+      ],
+      "remediation": "Add APPROVAL_WITHOUT_REQUEST exception logic.",
+      "status": "remediated"
+    },
+    {
+      "id": "ADV-06",
+      "finding": "Audit analytics did not flag multiple approvals for the same action.",
+      "discovery_run": 65,
+      "evidence": [
+        "test_audit_analytics_flags_duplicate_approval"
+      ],
+      "remediation": "Add DUPLICATE_APPROVAL exception logic.",
+      "status": "remediated"
+    },
+    {
+      "id": "ADV-07",
+      "finding": "Audit analytics did not flag multiple execution events for the same action.",
+      "discovery_run": 65,
+      "evidence": [
+        "test_audit_analytics_flags_duplicate_execution"
+      ],
+      "remediation": "Track executed resources and add DUPLICATE_EXECUTION exception logic.",
+      "status": "remediated"
+    },
+    {
+      "id": "ADV-08",
+      "finding": "Audit analytics did not identify requester self-execution in the event sequence.",
+      "discovery_run": 65,
+      "evidence": [
+        "test_audit_analytics_flags_requester_execution"
+      ],
+      "remediation": "Add REQUESTER_EXECUTION monitoring logic.",
+      "status": "remediated"
+    },
+    {
+      "id": "ADV-09",
+      "finding": "Execution for an unknown action resource was only flagged as missing approval, not missing request provenance.",
+      "discovery_run": 65,
+      "evidence": [
+        "test_audit_analytics_flags_execution_for_unknown_resource"
+      ],
+      "remediation": "Add EXECUTION_WITHOUT_REQUEST alongside missing-approval detection.",
+      "status": "remediated"
+    },
+    {
+      "id": "ADV-10",
+      "finding": "Deleting the most recent audit event left the remaining hash chain internally valid, so tail truncation was not detected.",
+      "discovery_run": 69,
+      "evidence": [
+        "test_audit_chain_detects_tail_event_deletion"
+      ],
+      "remediation": "Persist an independent local chain checkpoint with expected event count and last event hash; verification now checks both the chain and checkpoint.",
+      "status": "remediated"
+    },
+    {
+      "id": "ADV-11",
+      "finding": "Execution trusted an approved status even when approval provenance fields were missing or represented self-approval after direct data tampering.",
+      "discovery_run": 69,
+      "evidence": [
+        "test_execution_rejects_database_status_flip_without_approval_metadata",
+        "test_execution_rejects_tampered_self_approval_metadata"
+      ],
+      "remediation": "Require approved_at and independent approved_by metadata before execution; invalid provenance is denied and audited.",
+      "status": "remediated"
+    },
+    {
+      "id": "ADV-12",
+      "finding": "The audit store accepted blank actor, action, or outcome fields, weakening evidentiary quality.",
+      "discovery_run": 69,
+      "evidence": [
+        "test_audit_store_rejects_blank_required_event_fields"
+      ],
+      "remediation": "Normalize and reject blank required audit-event fields in local and BigQuery audit paths.",
+      "status": "remediated"
+    },
+    {
+      "id": "ADV-13",
+      "finding": "Human-reviewed action payload text accepted Unicode control/format characters, including bidirectional and zero-width controls that can distort reviewer-visible text or logs.",
+      "discovery_run": 78,
+      "evidence": [
+        "1000-case campaign family: payload_unicode_controls",
+        "test_action_payload_rejects_unsafe_control_and_format_characters"
+      ],
+      "remediation": "Reject unsafe Unicode Cc/Cf characters from action text while allowing ordinary newline/tab formatting.",
+      "status": "remediated"
+    },
+    {
+      "id": "ADV-14",
+      "finding": "Audit identity fields accepted Unicode control/format characters that could weaken the reliability and readability of audit evidence.",
+      "discovery_run": 78,
+      "evidence": [
+        "1000-case campaign family: audit_identity_unicode_controls",
+        "test_audit_store_rejects_unsafe_identity_characters"
+      ],
+      "remediation": "Reject Unicode Cc/Cf characters from required audit identity/action/outcome fields in local and BigQuery audit paths.",
+      "status": "remediated"
+    },
+    {
+      "id": "ADV-15",
+      "finding": "Canonical audit evidence accepted non-finite numeric values (NaN and infinities), producing implementation-specific JSON rather than strict interoperable evidence.",
+      "discovery_run": 78,
+      "evidence": [
+        "1000-case campaign family: audit_nonfinite_details",
+        "test_audit_store_rejects_nonfinite_detail_values"
+      ],
+      "remediation": "Serialize audit evidence with allow_nan=false so non-finite numbers are rejected before persistence/hashing.",
+      "status": "remediated"
+    }
+  ],
+  "historical_ci": {
+    "run_65": "12 failed adversarial test cases, 18 existing tests passed.",
+    "run_68": "30 tests passed after first-round remediation.",
+    "run_69": "6 failed second-round adversarial test cases, 30 tests passed.",
+    "run_72": "36 tests passed after second-round remediation.",
+    "run_78": "Initial 1000-case escalating campaign: 700 passed, 300 failed across three new finding classes.",
+    "run_82": "After remediation: 47/47 regression tests, 1000/1000 escalating campaign cases, and 20/20 executable assurance controls passed."
+  },
+  "claims_boundary": "The findings show iterative control testing and remediation on a self-built fictional system. They are not independent audit findings, production exceptions, or evidence of operating effectiveness over a client population."
+}

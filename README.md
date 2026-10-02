@@ -35,6 +35,10 @@ This repository contains the working reference implementation behind that recomm
 - [Implementation roadmap](docs/IMPLEMENTATION_ROADMAP.md)
 - [Verified results](docs/VERIFIED_RESULTS.md)
 - [Career/interview case](docs/CAREER_CASE_STUDY.md)
+- [Technology assurance review](docs/TECHNOLOGY_ASSURANCE_REVIEW.md)
+- [Assurance workpapers](docs/ASSURANCE_WORKPAPERS.md)
+- [Framework relevance map](docs/FRAMEWORK_RELEVANCE.md)
+- [Machine-readable risk/control matrix](assurance/control_matrix.json)
 
 ---
 
@@ -101,12 +105,15 @@ Local mode applies ACLs before cosine/lexical scoring. The BigQuery path carries
 
 ## Verified results
 
-**Reference validation:** NEXUS CI run #59  
-**Date:** 1 September 2026  
-**Pinned commit:** `b7da2a70ac37c43f1d270e1a52c16fb060084f1d`
+**Reference validation:** NEXUS CI run #82  
+**Date:** 2 October 2026  
+**Pinned commit:** `f0175250efb421ddc1151a118c1f35a3c20b85ec`
 
-### Backend / security
-- **14/14 tests passed**
+### Backend / security / assurance
+- **47/47 regression tests passed**
+- **1,000/1,000 escalating adversarial campaign cases passed after remediation**
+- **20/20 executable assurance controls passed**
+- **15 distinct control/monitoring finding classes documented and remediated**
 
 ### Controlled RAG evaluation
 - **8 cases**
@@ -116,9 +123,11 @@ Local mode applies ACLs before cosine/lexical scoring. The BigQuery path carries
 - grounding-decision accuracy: **1.000**
 - language-match rate: **1.000**
 - grounded keyword coverage: **1.000**
-- average deterministic local evaluation latency: **2.0 ms**
+- average deterministic local evaluation latency: **1.25 ms**
 
 The same CI run also completed the frontend production build and deployment-configuration validation successfully.
+
+The 1,000-case campaign did **not** start green: its first run passed 700 and failed 300 cases, exposing three new weaknesses around Unicode control/format characters and non-finite audit evidence. Those were remediated before the final 1,000/1,000 rerun.
 
 > These metrics validate expected behavior on the bundled fictional corpus. They are **not** claims of production-bank accuracy, safety, security, scale, or latency.
 
@@ -147,7 +156,9 @@ The same CI run also completed the frontend production build and deployment-conf
 - strict payload schemas
 - idempotent requests
 - persisted `pending_approval → approved → executed` state machine
+- four-eyes segregation of duties: requester cannot approve their own action
 - guarded transitions to prevent approval bypass/replay
+- denied approval/execution attempts written to the audit trail
 - portfolio-safe handoff rather than pretending a live HR/IT integration exists
 
 ### Auditability
@@ -155,6 +166,40 @@ The same CI run also completed the frontend production build and deployment-conf
 - SHA-256 hash-chain verification
 - BigQuery audit-event production path
 - request IDs and structured application logs
+- deterministic audit analytics for self-approval, orphan/duplicate approvals, requester execution, execution-without-request/approval, duplicate execution and repeated denied-login exceptions
+- local audit-chain checkpoint to detect tail truncation
+
+---
+
+## Technology assurance evidence
+
+NEXUS now includes an executable control-review layer designed around technology-assurance methodology rather than résumé wording alone.
+
+It covers:
+
+- system/process walkthrough and defined scope;
+- risk and control matrix;
+- GITC logical-access, change-management, operations and monitoring themes;
+- IT application controls for authorization, schema validation, approval and replay prevention;
+- four-eyes segregation of duties;
+- design-effectiveness and operating-effectiveness test logic;
+- audit workpapers and exception criteria;
+- deterministic audit analytics;
+- AI-assurance evaluation coverage;
+- cautious SOX/ICFR, SOC 1/ISAE 3402, SOC 2, COBIT/COSO relevance mapping without claiming certification or formal assurance;
+- a CI-gated 1,000-case escalating adversarial campaign with a preserved red-to-green finding/remediation trail.
+
+Run the local assurance review with:
+
+    PYTHONPATH=backend python backend/scripts/run_assurance_review.py --output assurance-report.json
+
+Run the escalating adversarial campaign with:
+
+    PYTHONPATH=backend python backend/scripts/run_adversarial_campaign.py --cases 1000 --output adversarial-report.json
+
+CI also runs this review and uploads the generated JSON evidence report as a workflow artifact.
+
+See [Technology assurance review](docs/TECHNOLOGY_ASSURANCE_REVIEW.md).
 
 ---
 
