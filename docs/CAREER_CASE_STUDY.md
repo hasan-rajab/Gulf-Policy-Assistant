@@ -18,7 +18,7 @@ For side effects, I separated the action plane from the answer plane. Only allow
 
 I then treated the system as a technology-assurance subject. I documented risks and control objectives, separated design effectiveness from operating effectiveness, created workpapers, mapped GITC and IT application-control themes, and wrote deterministic analytics for self-approval, execution-without-approval, and repeated denied-login exceptions. The CI pipeline executes an assurance review rather than merely documenting the controls.
 
-Two adversarial assurance rounds deliberately drove CI red, exposing 18 failing test cases across 12 documented control/monitoring findings. After remediation, NEXUS CI run #74 validated **36/36 tests**, the controlled eight-case RAG metric gate, and a separate **20/20 passing technology-assurance control review**. The frontend build and deployment-configuration checks also passed.
+I then added a deterministic 1,000-case escalating adversarial campaign. Its first run deliberately went red: **300/1,000 cases failed**, exposing three additional weaknesses around Unicode control characters and non-finite audit evidence. After remediation and targeted regression tests, NEXUS CI run #82 validated **47/47 regression tests**, **1,000/1,000 campaign cases**, the controlled eight-case RAG gate, and a separate **20/20 technology-assurance control review**.
 
 ## Architecture story
 
@@ -124,7 +124,7 @@ NEXUS documents the design and then re-performs controls through deterministic t
 
 **Control:** evidence gating, abstention, citation checks, bilingual evaluation, and adversarial regression testing.
 
-**Evidence:** run #74 retained all eight controlled evaluation metrics at 1.0; average deterministic local evaluation latency was 2.125 ms.
+**Evidence:** run #82 retained all eight controlled evaluation metrics at 1.0; average deterministic local evaluation latency was 1.25 ms.
 
 ## Evidence
 
@@ -146,8 +146,9 @@ NEXUS documents the design and then re-performs controls through deterministic t
 - GITC / ITAC / AI-assurance relevance mapping
 - FastAPI + Next.js
 - Docker + GitHub Actions
-- **Two adversarial rounds exposed 18 failing test cases across 12 documented findings before remediation**
-- **36/36 backend, security and assurance tests passed in CI run #74 after remediation**
+- **Earlier adversarial rounds exposed 18 failing test cases across 12 documented findings before remediation**
+- **A later 1,000-case escalating campaign initially produced 300 failures across 3 additional finding classes**
+- **47/47 regression tests and 1,000/1,000 campaign cases passed in CI run #82 after remediation**
 - **20/20 executable assurance controls passed**
 - **8/8 controlled RAG evaluation cases passed their regression gate**
 
@@ -156,7 +157,7 @@ NEXUS documents the design and then re-performs controls through deterministic t
 - Engineered a governed Arabic/English enterprise RAG platform with retrieval-time authorization, hybrid retrieval, deterministic reranking, grounded abstention, and citation-to-source integrity controls.
 - Designed and tested GITC/IT application-control patterns across logical access, approval workflows, segregation of duties, replay prevention, audit integrity, change-management gates, and AI assurance.
 - Implemented four-eyes approval, idempotent allowlisted actions, tamper-evident audit logging, and deterministic exception analytics for self-approval and unauthorized workflow transitions.
-- Deliberately adversarial-tested the self-built control environment in two rounds, documenting 12 findings from 18 failing test cases, remediating them, and rerunning CI to **36/36 tests** plus a **20/20 executable assurance control review**.
+- Built a **1,000-case escalating adversarial assurance campaign**; the first run exposed **300 failing cases** across three new control-evidence weaknesses, which were remediated before rerunning **1,000/1,000 cases**, **47/47 regression tests**, and a **20/20 executable assurance control review** successfully.
 
 ## Claims boundary
 
