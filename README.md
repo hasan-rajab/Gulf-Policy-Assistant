@@ -35,6 +35,10 @@ This repository contains the working reference implementation behind that recomm
 - [Implementation roadmap](docs/IMPLEMENTATION_ROADMAP.md)
 - [Verified results](docs/VERIFIED_RESULTS.md)
 - [Career/interview case](docs/CAREER_CASE_STUDY.md)
+- [Technology assurance review](docs/TECHNOLOGY_ASSURANCE_REVIEW.md)
+- [Assurance workpapers](docs/ASSURANCE_WORKPAPERS.md)
+- [Framework relevance map](docs/FRAMEWORK_RELEVANCE.md)
+- [Machine-readable risk/control matrix](assurance/control_matrix.json)
 
 ---
 
@@ -147,7 +151,9 @@ The same CI run also completed the frontend production build and deployment-conf
 - strict payload schemas
 - idempotent requests
 - persisted `pending_approval → approved → executed` state machine
+- four-eyes segregation of duties: requester cannot approve their own action
 - guarded transitions to prevent approval bypass/replay
+- denied approval/execution attempts written to the audit trail
 - portfolio-safe handoff rather than pretending a live HR/IT integration exists
 
 ### Auditability
@@ -155,6 +161,34 @@ The same CI run also completed the frontend production build and deployment-conf
 - SHA-256 hash-chain verification
 - BigQuery audit-event production path
 - request IDs and structured application logs
+- deterministic audit analytics for self-approval, execution-without-approval, and repeated denied-login exceptions
+
+---
+
+## Technology assurance evidence
+
+NEXUS now includes an executable control-review layer designed around technology-assurance methodology rather than résumé wording alone.
+
+It covers:
+
+- system/process walkthrough and defined scope;
+- risk and control matrix;
+- GITC logical-access, change-management, operations and monitoring themes;
+- IT application controls for authorization, schema validation, approval and replay prevention;
+- four-eyes segregation of duties;
+- design-effectiveness and operating-effectiveness test logic;
+- audit workpapers and exception criteria;
+- deterministic audit analytics;
+- AI-assurance evaluation coverage;
+- cautious SOX/ICFR, SOC 1/ISAE 3402, SOC 2, COBIT/COSO relevance mapping without claiming certification or formal assurance.
+
+Run the local assurance review with:
+
+    PYTHONPATH=backend python backend/scripts/run_assurance_review.py --output assurance-report.json
+
+CI also runs this review and uploads the generated JSON evidence report as a workflow artifact.
+
+See [Technology assurance review](docs/TECHNOLOGY_ASSURANCE_REVIEW.md).
 
 ---
 
