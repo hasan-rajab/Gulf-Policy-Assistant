@@ -36,6 +36,16 @@ def _hash_event(event: dict[str, Any], previous_hash: str) -> str:
     return hashlib.sha256(material).hexdigest()
 
 
+def _validate_event_fields(*, actor: str, action: str, outcome: str) -> tuple[str, str, str]:
+    actor_n = str(actor).strip().lower()
+    action_n = str(action).strip()
+    outcome_n = str(outcome).strip()
+    for field_name, value in (("actor", actor_n), ("action", action_n), ("outcome", outcome_n)):
+        if not value:
+            raise ValueError(f"Audit field '{field_name}' must be non-empty")
+    return actor_n, action_n, outcome_n
+
+
 class SQLiteAuditStore:
     """Append-only local audit trail with a tamper-evident hash chain."""
 
@@ -61,6 +71,29 @@ class SQLiteAuditStore:
             )
             """
         )
+        self._connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS audit_chain_state (
+              singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+              event_count INTEGER NOT NULL,
+              last_event_hash TEXT NOT NULL
+            )
+            """
+        )
+        state = self._connection.execute(
+            "SELECT event_count, last_event_hash FROM audit_chain_state WHERE singleton_id=1"
+        ).fetchone()
+        if state is None:
+            last = self._connection.execute(
+                "SELECT sequence, event_hash FROM audit_events ORDER BY sequence DESC LIMIT 1"
+            ).fetchone()
+            count_row = self._connection.execute("SELECT COUNT(*) FROM audit_events").fetchone()
+            event_count = int(count_row[0] or 0)
+            last_hash = str(last[1]) if last else "GENESIS"
+            self._connection.execute(
+                "INSERT INTO audit_chain_state(singleton_id, event_count, last_event_hash) VALUES (1, ?, ?)",
+                (event_count, last_hash),
+            )
         self._connection.commit()
 
     def record(
@@ -73,13 +106,14 @@ class SQLiteAuditStore:
         request_id: str | None,
         details: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        actor_n, action_n, outcome_n = _validate_event_fields(actor=actor, action=action, outcome=outcome)
         event = {
             "event_id": str(uuid4()),
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "actor": actor.lower(),
-            "action": action,
+            "actor": actor_n,
+            "action": action_n,
             "resource": resource,
-            "outcome": outcome,
+            "outcome": outcome_n,
             "request_id": request_id,
             "details": details or {},
         }
@@ -108,6 +142,10 @@ class SQLiteAuditStore:
                     previous_hash,
                     event_hash,
                 ),
+            )
+            self._connection.execute(
+                "UPDATE audit_chain_state SET event_count=event_count+1, last_event_hash=? WHERE singleton_id=1",
+                (event_hash,),
             )
             self._connection.commit()
         return {**event, "previous_hash": previous_hash, "event_hash": event_hash}
@@ -146,6 +184,12 @@ class SQLiteAuditStore:
             FROM audit_events ORDER BY sequence ASC
             """
         ).fetchall()
+        state = self._connection.execute(
+            "SELECT event_count, last_event_hash FROM audit_chain_state WHERE singleton_id=1"
+        ).fetchone()
+        if state is None:
+            return False
+
         expected_previous = "GENESIS"
         for row in rows:
             details = json.loads(row[7])
@@ -164,7 +208,10 @@ class SQLiteAuditStore:
             if row[9] != _hash_event(event, expected_previous):
                 return False
             expected_previous = row[9]
-        return True
+
+        actual_count = len(rows)
+        actual_last_hash = expected_previous if rows else "GENESIS"
+        return actual_count == int(state[0]) and actual_last_hash == str(state[1])
 
 
 class BigQueryAuditStore:
@@ -191,13 +238,14 @@ class BigQueryAuditStore:
         request_id: str | None,
         details: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        actor_n, action_n, outcome_n = _validate_event_fields(actor=actor, action=action, outcome=outcome)
         event = {
             "event_id": str(uuid4()),
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "actor": actor.lower(),
-            "action": action,
+            "actor": actor_n,
+            "action": action_n,
             "resource": resource,
-            "outcome": outcome,
+            "outcome": outcome_n,
             "request_id": request_id,
             "details": details or {},
         }
