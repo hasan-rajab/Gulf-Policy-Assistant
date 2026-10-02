@@ -125,21 +125,7 @@ Run:
 
     PYTHONPATH=backend python backend/scripts/run_assurance_review.py --output assurance-report.json
 
-The script builds disposable local stores and executes the following tests:
-
-1. unauthorized restricted-document retrieval
-2. authorized HR retrieval
-3. execution-before-approval denial
-4. non-admin approval denial
-5. administrator self-approval denial
-6. idempotency/replay protection
-7. arbitrary action rejection
-8. normal approved action lifecycle
-9. audit-chain verification
-10. audit exception analytics
-11. controlled audit-row tampering
-12. CI gate inspection
-13. AI evaluation-set coverage inspection
+The script builds disposable local stores and executes 20 control tests spanning authorization, approval workflow, segregation of duties, replay/idempotency semantics, malformed input, audit-chain integrity, tail-truncation detection, approval provenance, exception analytics, change-management gates and AI evaluation coverage.
 
 The JSON report records each control ID, objective, pass/fail result, evidence description, and any exception.
 
@@ -155,11 +141,7 @@ For a real engagement, operating-effectiveness testing would define the audit pe
 
 backend/app/services/audit_analytics.py performs explainable control analytics over structured events.
 
-Current exception tests include:
-
-- **SELF_APPROVAL** — requester and approver are the same principal
-- **EXECUTION_WITHOUT_RECORDED_APPROVAL** — an execution event has no prior approval event in the analyzed sequence
-- **REPEATED_DENIED_LOGIN** — repeated denied authentication events meet the configured threshold
+Current exception tests include self-approval, approval without request, duplicate approval, requester execution, execution without request, execution without recorded approval, duplicate execution and repeated denied-login patterns.
 
 These analytics are deliberately deterministic so the reviewer can explain exactly why an exception was raised.
 
@@ -192,9 +174,7 @@ NEXUS distinguishes a control failure from a portfolio scope limitation.
 
 ### Control exception
 
-Example: an execution event appears without a prior approval event.
-
-Response: flag the exception, identify the affected action/resource, determine whether the state machine or audit event was bypassed, contain the workflow, remediate the control, and re-perform the test.
+NEXUS now preserves the development history of actual adversarial findings. CI run #65 exposed 12 failing adversarial cases and run #69 exposed 6 more. These were grouped into 12 distinct findings, remediated, and re-performed successfully. See assurance/adversarial_findings.json for the finding/remediation trail.
 
 ### Scope limitation / production gap
 
