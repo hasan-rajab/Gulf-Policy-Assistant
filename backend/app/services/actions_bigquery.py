@@ -69,8 +69,12 @@ class BigQueryEnterpriseActionService:
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         clean = EnterpriseActionService._validate_payload(action_name, payload)
-        if idempotency_key and len(idempotency_key) > 128:
-            raise ValueError("Idempotency key is too long")
+        if idempotency_key is not None:
+            idempotency_key = idempotency_key.strip()
+            if not idempotency_key:
+                raise ValueError("Idempotency key cannot be blank")
+            if len(idempotency_key) > 128:
+                raise ValueError("Idempotency key is too long")
 
         action_id = str(uuid4())
         created_at = datetime.now(timezone.utc)
@@ -110,6 +114,18 @@ class BigQueryEnterpriseActionService:
             row = self._find(action_id)
         if row is None:
             raise RuntimeError("Action request was not persisted")
+
+        if row["id"] != action_id:
+            if row["action_name"] != action_name or row["payload"] != clean:
+                self._record_denial(
+                    actor=principal.email,
+                    action="enterprise_action_request_rejected",
+                    action_id=row["id"],
+                    request_id=request_id,
+                    reason="idempotency_key_conflict",
+                    status_value=row["status"],
+                )
+                raise ValueError("Idempotency key conflict: key was already used for a different request")
 
         if row["id"] == action_id:
             self.audit.record(
@@ -212,6 +228,17 @@ class BigQueryEnterpriseActionService:
         row = self._find(action_id)
         if row is None:
             raise KeyError(action_id)
+
+        if row["requester"].lower() == executor.email.lower():
+            self._record_denial(
+                actor=executor.email,
+                action="enterprise_action_execution_attempt",
+                action_id=action_id,
+                request_id=request_id,
+                reason="requester_execution_prohibited",
+                status_value=row["status"],
+            )
+            raise PermissionError("Requester cannot execute their own action")
 
         if row["status"] != "approved":
             self._record_denial(
