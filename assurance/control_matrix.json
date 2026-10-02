@@ -1,0 +1,224 @@
+{
+  "system": "NEXUS Enterprise AI",
+  "purpose": "Machine-readable risk and control matrix for the portfolio technology-assurance review.",
+  "claims_boundary": "Mappings describe control relevance only. They do not represent a SOC report, SOX compliance opinion, ISAE 3402 engagement, COBIT certification, or production operating-effectiveness conclusion.",
+  "controls": [
+    {
+      "control_id": "GITC-AC-01",
+      "domain": "Logical access",
+      "risk": "Unauthorized users retrieve restricted enterprise content.",
+      "objective": "Restrict candidate retrieval to content the authenticated principal is authorized to access.",
+      "implementation": "Role/department ACLs are evaluated before semantic and lexical scoring.",
+      "test_procedure": "Search for a restricted HR chunk as an operations employee and confirm the restricted chunk is absent.",
+      "evidence": [
+        "backend/app/core/access.py",
+        "backend/app/stores/local.py",
+        "backend/tests/test_nexus_security.py",
+        "backend/app/services/assurance.py"
+      ],
+      "framework_relevance": {
+        "GITC": "Logical access",
+        "SOC_2": "Security / logical access",
+        "SOX_ICFR": "Potentially relevant when the application supports financial reporting; applicability is not asserted here.",
+        "COBIT": "Access and security-management control themes"
+      }
+    },
+    {
+      "control_id": "GITC-AC-02",
+      "domain": "Entitlement management",
+      "risk": "Valid users are denied required information or receive access through client-supplied claims.",
+      "objective": "Resolve roles and departments server-side and apply explicit grants.",
+      "implementation": "AccessContext is built from trusted configured identity profiles; client role/department headers are ignored.",
+      "test_procedure": "Confirm HR department access succeeds while an unrelated department remains denied.",
+      "evidence": [
+        "backend/app/core/security.py",
+        "backend/app/core/access.py",
+        "backend/tests/test_nexus_security.py",
+        "backend/app/services/assurance.py"
+      ],
+      "framework_relevance": {
+        "GITC": "Logical access",
+        "SOC_2": "Security / authorization",
+        "COBIT": "Identity and access-management control themes"
+      }
+    },
+    {
+      "control_id": "GITC-CM-01",
+      "domain": "Change management",
+      "risk": "Code changes bypass security, evaluation, frontend, or deployment checks.",
+      "objective": "Apply repeatable automated quality gates to repository changes.",
+      "implementation": "GitHub Actions runs backend/security tests, strict AI evaluation, frontend build, and deployment configuration validation.",
+      "test_procedure": "Inspect the workflow for the required gates and run it on pull requests.",
+      "evidence": [
+        ".github/workflows/ci.yml",
+        "backend/scripts/run_assurance_review.py"
+      ],
+      "framework_relevance": {
+        "GITC": "Change management",
+        "SOX_ICFR": "Common GITC pattern when systems support ICFR; NEXUS is not represented as an ICFR system.",
+        "SOC_1_ISAE_3402": "Potential service-organization change-control relevance",
+        "COBIT": "Change enablement / managed changes themes"
+      }
+    },
+    {
+      "control_id": "GITC-OPS-01",
+      "domain": "IT operations and logging",
+      "risk": "Audit history cannot be trusted because event integrity is not verifiable.",
+      "objective": "Make modification of locally stored audit events detectable.",
+      "implementation": "SQLite audit events are linked by previous-hash and event-hash values.",
+      "test_procedure": "Verify the chain after normal activity.",
+      "evidence": [
+        "backend/app/services/audit.py",
+        "backend/tests/test_nexus_security.py",
+        "backend/app/services/assurance.py"
+      ],
+      "framework_relevance": {
+        "GITC": "IT operations / logging",
+        "SOC_2": "Security monitoring and traceability",
+        "COBIT": "Monitoring and control-assurance themes"
+      }
+    },
+    {
+      "control_id": "GITC-OPS-02",
+      "domain": "IT operations and logging",
+      "risk": "Stored audit events are altered without detection.",
+      "objective": "Detect tampering with locally persisted audit records.",
+      "implementation": "Chain verification recomputes every event hash and predecessor relationship.",
+      "test_procedure": "Modify a stored event directly and confirm chain verification fails.",
+      "evidence": [
+        "backend/app/services/audit.py",
+        "backend/tests/test_nexus_security.py",
+        "backend/app/services/assurance.py"
+      ],
+      "framework_relevance": {
+        "GITC": "Logging / monitoring",
+        "SOC_2": "Security monitoring and integrity"
+      }
+    },
+    {
+      "control_id": "GITC-MON-01",
+      "domain": "Monitoring",
+      "risk": "Approval-workflow exceptions are present but not surfaced for review.",
+      "objective": "Detect control exceptions in structured audit events.",
+      "implementation": "Deterministic analytics flag self-approval, execution without recorded approval, and repeated denied logins.",
+      "test_procedure": "Run analytics against valid and intentionally invalid event sequences.",
+      "evidence": [
+        "backend/app/services/audit_analytics.py",
+        "backend/tests/test_assurance.py",
+        "backend/app/services/assurance.py"
+      ],
+      "framework_relevance": {
+        "GITC": "Security/event monitoring",
+        "SOC_2": "Monitoring activities",
+        "COBIT": "Monitoring and evaluation themes"
+      }
+    },
+    {
+      "control_id": "ITAC-ACT-01",
+      "domain": "Application control",
+      "risk": "An enterprise side effect occurs without prior human authorization.",
+      "objective": "Prevent execution until the action is in approved state.",
+      "implementation": "Persisted action-state transition requires pending_approval -> approved -> executed.",
+      "test_procedure": "Attempt execution from pending_approval and confirm denial.",
+      "evidence": [
+        "backend/app/services/actions.py",
+        "backend/tests/test_nexus_security.py",
+        "backend/app/services/assurance.py"
+      ],
+      "framework_relevance": {
+        "ITAC": "Authorization / processing control",
+        "SOC_2": "Security and processing-integrity themes",
+        "SOX_ICFR": "Potentially relevant if the action affects financially significant processing; not asserted for this demo."
+      }
+    },
+    {
+      "control_id": "ITAC-ACT-02",
+      "domain": "Application control",
+      "risk": "An unauthorized user approves a side-effecting action.",
+      "objective": "Restrict approval to administrator principals.",
+      "implementation": "Approval requires knowledge_admin/admin role resolved from the trusted AccessContext.",
+      "test_procedure": "Attempt approval as a normal employee and confirm denial plus audit evidence.",
+      "evidence": [
+        "backend/app/services/actions.py",
+        "backend/app/core/access.py",
+        "backend/tests/test_assurance.py"
+      ],
+      "framework_relevance": {
+        "ITAC": "Authorization control",
+        "SOC_2": "Logical access",
+        "COBIT": "Access-control themes"
+      }
+    },
+    {
+      "control_id": "ITAC-ACT-03",
+      "domain": "Segregation of duties",
+      "risk": "A privileged requester can authorize their own high-risk action.",
+      "objective": "Enforce a four-eyes approval pattern.",
+      "implementation": "The requester is prohibited from approving the same action even if they are an administrator.",
+      "test_procedure": "Create an administrator-owned request and attempt self-approval.",
+      "evidence": [
+        "backend/app/services/actions.py",
+        "backend/tests/test_assurance.py",
+        "backend/app/services/assurance.py"
+      ],
+      "framework_relevance": {
+        "ITAC": "Segregation of duties",
+        "SOX_ICFR": "Common authorization principle where financially significant actions are in scope; applicability is not asserted.",
+        "SOC_1_ISAE_3402": "Potential authorization/control-activity relevance"
+      }
+    },
+    {
+      "control_id": "ITAC-ACT-04",
+      "domain": "Application control",
+      "risk": "A repeated request creates duplicate side effects.",
+      "objective": "Prevent replay from producing duplicate action requests.",
+      "implementation": "Requester plus idempotency key is unique and repeated requests return the original action.",
+      "test_procedure": "Submit the same action twice with the same idempotency key and compare action IDs.",
+      "evidence": [
+        "backend/app/services/actions.py",
+        "backend/tests/test_nexus_security.py",
+        "backend/app/services/assurance.py"
+      ],
+      "framework_relevance": {
+        "ITAC": "Processing completeness / duplicate prevention",
+        "SOC_2": "Processing-integrity themes"
+      }
+    },
+    {
+      "control_id": "ITAC-ACT-05",
+      "domain": "Application control",
+      "risk": "The model or caller invokes an arbitrary high-risk tool or malformed payload.",
+      "objective": "Constrain actions to a fixed allowlist and strict payload schemas.",
+      "implementation": "Unregistered action names, unknown fields, nested structures, and invalid values are rejected.",
+      "test_procedure": "Submit an unregistered shell-command action and confirm rejection.",
+      "evidence": [
+        "backend/app/services/actions.py",
+        "backend/tests/test_nexus_security.py",
+        "backend/app/services/assurance.py"
+      ],
+      "framework_relevance": {
+        "ITAC": "Input validation / authorized processing",
+        "SOC_2": "Security and processing-integrity themes"
+      }
+    },
+    {
+      "control_id": "AI-ASSUR-01",
+      "domain": "AI assurance",
+      "risk": "The AI answers unsupported questions, loses citation integrity, or behaves inconsistently across supported languages.",
+      "objective": "Regression-test grounding, abstention, citation integrity, bilingual behavior, and adversarial instruction resistance.",
+      "implementation": "A controlled eight-case bilingual evaluation is enforced as a strict CI gate.",
+      "test_procedure": "Run backend/scripts/evaluate.py against evaluation/eval_set.json and compare metrics to the CI thresholds.",
+      "evidence": [
+        "evaluation/eval_set.json",
+        "backend/app/services/evaluation.py",
+        ".github/workflows/ci.yml",
+        "docs/VERIFIED_RESULTS.md"
+      ],
+      "framework_relevance": {
+        "AI_assurance": "Grounding, traceability, human oversight, and evaluation",
+        "NIST_AI_RMF": "Measure/manage themes",
+        "SOC_2": "Relevant only to the extent AI behavior affects in-scope trust-service commitments"
+      }
+    }
+  ]
+}
