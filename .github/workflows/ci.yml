@@ -40,6 +40,21 @@ jobs:
       - name: Run backend and security tests
         run: PYTHONPATH=backend pytest -q backend/tests
 
+      - name: Run 1000-case escalating adversarial assurance campaign
+        run: |
+          PYTHONPATH=backend python backend/scripts/run_adversarial_campaign.py \
+            --cases 1000 \
+            --output /tmp/nexus-adversarial-1000-report.json
+
+      - name: Upload adversarial campaign evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexus-adversarial-1000-report
+          path: /tmp/nexus-adversarial-1000-report.json
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Ingest sample policy corpus
         run: PYTHONPATH=backend python backend/scripts/ingest_directory.py ./sample_data
 
