@@ -41,11 +41,13 @@ Arbitrary tool names, URLs, shell commands, SQL, nested objects, and unknown fie
 
 `pending_approval -> approved -> executed`
 
+Denied approval/execution attempts are also written to the audit trail with structured reason codes such as `insufficient_privilege`, `self_approval_prohibited`, and `approval_required`.
+
 The demo executor creates an external-system handoff reference. It does not pretend to call a live HR or IT platform.
 
 ## Audit integrity
 
-Local audit events are stored in SQLite with an append-only sequence and SHA-256 hash chain. A verification function recalculates the chain and detects modified rows. The BigQuery production path appends the same event envelope to a partitioned audit table for warehouse retention and external governance controls.
+Local audit events are stored in SQLite with an append-only sequence and SHA-256 hash chain. A verification function recalculates the chain and detects modified rows. The BigQuery production path appends the same event envelope to a partitioned audit table for warehouse retention and external governance controls. Local audit events can also be analyzed deterministically for self-approval, execution-without-approval, and repeated-denied-login exception patterns.
 
 ## Failure behavior
 
@@ -55,4 +57,7 @@ Local audit events are stored in SQLite with an append-only sequence and SHA-256
 - non-admin evaluation is rejected to protect cost and evaluation integrity
 - non-admin approval/execution is rejected
 - actions cannot execute before approval
+- requesters cannot approve their own actions
+- denied approval/execution attempts are auditable
 - action request IDs are idempotent per requester
+- audit analytics can surface defined workflow/control exceptions
