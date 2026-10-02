@@ -6,7 +6,7 @@ NEXUS is a governed Arabic/English enterprise RAG and technology-assurance case 
 
 ## 30-second recruiter version
 
-I built NEXUS to solve the enterprise problem behind RAG: an LLM should only retrieve information an authenticated employee is allowed to see, and generated text should never become authority to execute a business action. NEXUS enforces document ACLs before retrieval scoring, uses grounded evidence and citations, abstains when evidence is insufficient, and puts enterprise actions behind allowlisted, approval-gated workflows. I then extended the project into a technology-assurance case with a risk/control matrix, GITC and application-control testing, four-eyes approval, audit analytics, workpapers, and an executable 13-control assurance review.
+I built NEXUS to solve the enterprise problem behind RAG: an LLM should only retrieve information an authenticated employee is allowed to see, and generated text should never become authority to execute a business action. NEXUS enforces document ACLs before retrieval scoring, uses grounded evidence and citations, abstains when evidence is insufficient, and puts enterprise actions behind allowlisted, approval-gated workflows. I then extended the project into a technology-assurance case with a risk/control matrix, GITC and application-control testing, four-eyes approval, audit analytics, workpapers, and an executable 20-control assurance review.
 
 ## 90-second interview version
 
@@ -18,7 +18,7 @@ For side effects, I separated the action plane from the answer plane. Only allow
 
 I then treated the system as a technology-assurance subject. I documented risks and control objectives, separated design effectiveness from operating effectiveness, created workpapers, mapped GITC and IT application-control themes, and wrote deterministic analytics for self-approval, execution-without-approval, and repeated denied-login exceptions. The CI pipeline executes an assurance review rather than merely documenting the controls.
 
-NEXUS CI run #63 validated **18 passing tests**, the controlled eight-case RAG metric gate, and a separate **13/13 passing technology-assurance control review**. The frontend build and deployment-configuration checks also passed.
+Two adversarial assurance rounds deliberately drove CI red, exposing 18 failing test cases across 12 documented control/monitoring findings. After remediation, NEXUS CI run #74 validated **36/36 tests**, the controlled eight-case RAG metric gate, and a separate **20/20 passing technology-assurance control review**. The frontend build and deployment-configuration checks also passed.
 
 ## Architecture story
 
@@ -124,7 +124,7 @@ NEXUS documents the design and then re-performs controls through deterministic t
 
 **Control:** evidence gating, abstention, citation checks, bilingual evaluation, and adversarial regression testing.
 
-**Evidence:** run #63 passed all strict eight-case metrics at 1.0; average deterministic local evaluation latency was 2.125 ms.
+**Evidence:** run #74 retained all eight controlled evaluation metrics at 1.0; average deterministic local evaluation latency was 2.125 ms.
 
 ## Evidence
 
@@ -146,16 +146,17 @@ NEXUS documents the design and then re-performs controls through deterministic t
 - GITC / ITAC / AI-assurance relevance mapping
 - FastAPI + Next.js
 - Docker + GitHub Actions
-- **18/18 tests passed in CI run #63**
-- **13/13 executable assurance controls passed**
-- **8/8 controlled RAG evaluation cases passed their strict metric gate**
+- **Two adversarial rounds exposed 18 failing test cases across 12 documented findings before remediation**
+- **36/36 backend, security and assurance tests passed in CI run #74 after remediation**
+- **20/20 executable assurance controls passed**
+- **8/8 controlled RAG evaluation cases passed their regression gate**
 
 ## CV-ready bullets
 
 - Engineered a governed Arabic/English enterprise RAG platform with retrieval-time authorization, hybrid retrieval, deterministic reranking, grounded abstention, and citation-to-source integrity controls.
 - Designed and tested GITC/IT application-control patterns across logical access, approval workflows, segregation of duties, replay prevention, audit integrity, change-management gates, and AI assurance.
 - Implemented four-eyes approval, idempotent allowlisted actions, tamper-evident audit logging, and deterministic exception analytics for self-approval and unauthorized workflow transitions.
-- Built an executable technology-assurance review with risk/control matrix and workpapers; CI run #63 passed **13/13 control tests**, **18/18 backend/security/assurance tests**, and all strict metrics across an **8-case bilingual RAG evaluation** on the controlled fictional corpus.
+- Deliberately adversarial-tested the self-built control environment in two rounds, documenting 12 findings from 18 failing test cases, remediating them, and rerunning CI to **36/36 tests** plus a **20/20 executable assurance control review**.
 
 ## Claims boundary
 
