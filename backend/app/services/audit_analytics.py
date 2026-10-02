@@ -16,6 +16,7 @@ def analyze_audit_events(
     """
     ordered = list(events)
     approvals: set[str] = set()
+    executions: set[str] = set()
     requests: dict[str, str] = {}
     failed_logins: Counter[str] = Counter()
     exceptions: list[dict[str, Any]] = []
@@ -33,6 +34,29 @@ def analyze_audit_events(
         elif action == "enterprise_action_approved" and resource:
             resource_id = str(resource)
             requester = str(details.get("requester") or requests.get(resource_id) or "").lower()
+
+            if resource_id not in requests:
+                exceptions.append(
+                    {
+                        "type": "APPROVAL_WITHOUT_REQUEST",
+                        "resource": resource_id,
+                        "actor": actor,
+                        "severity": "high",
+                        "reason": "approval event has no prior request event in the analyzed sequence",
+                    }
+                )
+
+            if resource_id in approvals:
+                exceptions.append(
+                    {
+                        "type": "DUPLICATE_APPROVAL",
+                        "resource": resource_id,
+                        "actor": actor,
+                        "severity": "high",
+                        "reason": "more than one approval event was recorded for the same action",
+                    }
+                )
+
             if requester and requester == actor:
                 exceptions.append(
                     {
@@ -47,6 +71,19 @@ def analyze_audit_events(
 
         elif action == "enterprise_action_executed" and resource:
             resource_id = str(resource)
+            requester = requests.get(resource_id, "")
+
+            if resource_id not in requests:
+                exceptions.append(
+                    {
+                        "type": "EXECUTION_WITHOUT_REQUEST",
+                        "resource": resource_id,
+                        "actor": actor,
+                        "severity": "critical",
+                        "reason": "execution event has no prior request event in the analyzed sequence",
+                    }
+                )
+
             if resource_id not in approvals:
                 exceptions.append(
                     {
@@ -57,6 +94,30 @@ def analyze_audit_events(
                         "reason": "execution event has no prior approval event in the analyzed sequence",
                     }
                 )
+
+            if resource_id in executions:
+                exceptions.append(
+                    {
+                        "type": "DUPLICATE_EXECUTION",
+                        "resource": resource_id,
+                        "actor": actor,
+                        "severity": "critical",
+                        "reason": "more than one execution event was recorded for the same action",
+                    }
+                )
+
+            if requester and requester == actor:
+                exceptions.append(
+                    {
+                        "type": "REQUESTER_EXECUTION",
+                        "resource": resource_id,
+                        "actor": actor,
+                        "severity": "high",
+                        "reason": "requester executed their own action",
+                    }
+                )
+
+            executions.add(resource_id)
 
         elif action == "login" and outcome == "denied":
             failed_logins[actor or "unknown"] += 1
@@ -79,4 +140,5 @@ def analyze_audit_events(
         "exceptions": exceptions,
         "failed_login_counts": dict(sorted(failed_logins.items())),
         "approved_action_count": len(approvals),
+        "executed_action_count": len(executions),
     }
