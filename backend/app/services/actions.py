@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 import threading
 from datetime import datetime, timezone
@@ -83,6 +84,8 @@ class EnterpriseActionService:
         for key, value in payload.items():
             if not isinstance(value, (str, int, float, bool)):
                 raise ValueError(f"Field '{key}' must be a scalar value")
+            if isinstance(value, float) and not math.isfinite(value):
+                raise ValueError(f"Field '{key}' must be a finite numeric value")
             text = str(value).strip()
             if not text or len(text) > 2000:
                 raise ValueError(f"Field '{key}' is empty or too long")
@@ -121,8 +124,12 @@ class EnterpriseActionService:
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         clean = self._validate_payload(action_name, payload)
-        if idempotency_key and len(idempotency_key) > 128:
-            raise ValueError("Idempotency key is too long")
+        if idempotency_key is not None:
+            idempotency_key = idempotency_key.strip()
+            if not idempotency_key:
+                raise ValueError("Idempotency key cannot be blank")
+            if len(idempotency_key) > 128:
+                raise ValueError("Idempotency key is too long")
 
         with self._lock:
             if idempotency_key:
@@ -131,6 +138,17 @@ class EnterpriseActionService:
                     (principal.email, idempotency_key),
                 ).fetchone()
                 if existing:
+                    existing_payload = json.loads(existing["payload"])
+                    if existing["action_name"] != action_name or existing_payload != clean:
+                        self._record_denial(
+                            actor=principal.email,
+                            action="enterprise_action_request_rejected",
+                            action_id=existing["id"],
+                            request_id=request_id,
+                            reason="idempotency_key_conflict",
+                            status_value=existing["status"],
+                        )
+                        raise ValueError("Idempotency key conflict: key was already used for a different request")
                     return self._row_to_dict(existing)
 
             action_id = str(uuid4())
@@ -252,6 +270,17 @@ class EnterpriseActionService:
             ).fetchone()
             if row is None:
                 raise KeyError(action_id)
+
+            if row["requester"].lower() == executor.email.lower():
+                self._record_denial(
+                    actor=executor.email,
+                    action="enterprise_action_execution_attempt",
+                    action_id=action_id,
+                    request_id=request_id,
+                    reason="requester_execution_prohibited",
+                    status_value=row["status"],
+                )
+                raise PermissionError("Requester cannot execute their own action")
 
             if row["status"] != "approved":
                 self._record_denial(
