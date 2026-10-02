@@ -105,14 +105,15 @@ Local mode applies ACLs before cosine/lexical scoring. The BigQuery path carries
 
 ## Verified results
 
-**Reference validation:** NEXUS CI run #74  
+**Reference validation:** NEXUS CI run #82  
 **Date:** 2 October 2026  
-**Pinned commit:** `83328e2eb599276b655d1d197b361308f7011c87`
+**Pinned commit:** `f0175250efb421ddc1151a118c1f35a3c20b85ec`
 
 ### Backend / security / assurance
-- **36/36 tests passed after two adversarial remediation rounds**
+- **47/47 regression tests passed**
+- **1,000/1,000 escalating adversarial campaign cases passed after remediation**
 - **20/20 executable assurance controls passed**
-- **12 distinct control/monitoring findings documented and remediated**
+- **15 distinct control/monitoring finding classes documented and remediated**
 
 ### Controlled RAG evaluation
 - **8 cases**
@@ -122,9 +123,11 @@ Local mode applies ACLs before cosine/lexical scoring. The BigQuery path carries
 - grounding-decision accuracy: **1.000**
 - language-match rate: **1.000**
 - grounded keyword coverage: **1.000**
-- average deterministic local evaluation latency: **2.125 ms**
+- average deterministic local evaluation latency: **1.25 ms**
 
 The same CI run also completed the frontend production build and deployment-configuration validation successfully.
+
+The 1,000-case campaign did **not** start green: its first run passed 700 and failed 300 cases, exposing three new weaknesses around Unicode control/format characters and non-finite audit evidence. Those were remediated before the final 1,000/1,000 rerun.
 
 > These metrics validate expected behavior on the bundled fictional corpus. They are **not** claims of production-bank accuracy, safety, security, scale, or latency.
 
@@ -183,11 +186,16 @@ It covers:
 - audit workpapers and exception criteria;
 - deterministic audit analytics;
 - AI-assurance evaluation coverage;
-- cautious SOX/ICFR, SOC 1/ISAE 3402, SOC 2, COBIT/COSO relevance mapping without claiming certification or formal assurance.
+- cautious SOX/ICFR, SOC 1/ISAE 3402, SOC 2, COBIT/COSO relevance mapping without claiming certification or formal assurance;
+- a CI-gated 1,000-case escalating adversarial campaign with a preserved red-to-green finding/remediation trail.
 
 Run the local assurance review with:
 
     PYTHONPATH=backend python backend/scripts/run_assurance_review.py --output assurance-report.json
+
+Run the escalating adversarial campaign with:
+
+    PYTHONPATH=backend python backend/scripts/run_adversarial_campaign.py --cases 1000 --output adversarial-report.json
 
 CI also runs this review and uploads the generated JSON evidence report as a workflow artifact.
 
