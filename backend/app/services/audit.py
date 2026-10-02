@@ -4,6 +4,7 @@ import hashlib
 import json
 import sqlite3
 import threading
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
@@ -28,7 +29,16 @@ class AuditStore(Protocol):
 
 
 def _canonical_event(event: dict[str, Any]) -> str:
-    return json.dumps(event, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    # Audit evidence must remain standards-compliant JSON. Reject NaN/Infinity
+    # rather than serializing implementation-specific non-finite literals.
+    return json.dumps(
+        event,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+        allow_nan=False,
+    )
 
 
 def _hash_event(event: dict[str, Any], previous_hash: str) -> str:
@@ -43,6 +53,10 @@ def _validate_event_fields(*, actor: str, action: str, outcome: str) -> tuple[st
     for field_name, value in (("actor", actor_n), ("action", action_n), ("outcome", outcome_n)):
         if not value:
             raise ValueError(f"Audit field '{field_name}' must be non-empty")
+        if any(unicodedata.category(ch) in {"Cc", "Cf"} for ch in value):
+            raise ValueError(
+                f"Audit field '{field_name}' contains unsafe control/format characters"
+            )
     return actor_n, action_n, outcome_n
 
 
