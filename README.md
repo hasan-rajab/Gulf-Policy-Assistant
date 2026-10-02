@@ -105,12 +105,14 @@ Local mode applies ACLs before cosine/lexical scoring. The BigQuery path carries
 
 ## Verified results
 
-**Reference validation:** NEXUS CI run #59  
-**Date:** 1 September 2026  
-**Pinned commit:** `b7da2a70ac37c43f1d270e1a52c16fb060084f1d`
+**Reference validation:** NEXUS CI run #74  
+**Date:** 2 October 2026  
+**Pinned commit:** `83328e2eb599276b655d1d197b361308f7011c87`
 
-### Backend / security
-- **14/14 tests passed**
+### Backend / security / assurance
+- **36/36 tests passed after two adversarial remediation rounds**
+- **20/20 executable assurance controls passed**
+- **12 distinct control/monitoring findings documented and remediated**
 
 ### Controlled RAG evaluation
 - **8 cases**
@@ -120,7 +122,7 @@ Local mode applies ACLs before cosine/lexical scoring. The BigQuery path carries
 - grounding-decision accuracy: **1.000**
 - language-match rate: **1.000**
 - grounded keyword coverage: **1.000**
-- average deterministic local evaluation latency: **2.0 ms**
+- average deterministic local evaluation latency: **2.125 ms**
 
 The same CI run also completed the frontend production build and deployment-configuration validation successfully.
 
@@ -161,7 +163,8 @@ The same CI run also completed the frontend production build and deployment-conf
 - SHA-256 hash-chain verification
 - BigQuery audit-event production path
 - request IDs and structured application logs
-- deterministic audit analytics for self-approval, execution-without-approval, and repeated denied-login exceptions
+- deterministic audit analytics for self-approval, orphan/duplicate approvals, requester execution, execution-without-request/approval, duplicate execution and repeated denied-login exceptions
+- local audit-chain checkpoint to detect tail truncation
 
 ---
 
