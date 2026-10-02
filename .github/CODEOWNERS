@@ -1,0 +1,7 @@
+# Ownership hints for security- and assurance-relevant repository changes.
+# Enforcement requires GitHub branch-protection/ruleset configuration.
+* @hasan-rajab
+/backend/app/core/ @hasan-rajab
+/backend/app/services/ @hasan-rajab
+/assurance/ @hasan-rajab
+/.github/workflows/ @hasan-rajab
