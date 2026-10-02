@@ -229,6 +229,20 @@ class BigQueryEnterpriseActionService:
         if row is None:
             raise KeyError(action_id)
 
+        if row["status"] == "approved":
+            approved_by = str(row["approved_by"] or "").strip().lower()
+            approved_at = str(row["approved_at"] or "").strip()
+            if not approved_by or not approved_at or approved_by == row["requester"].lower():
+                self._record_denial(
+                    actor=executor.email,
+                    action="enterprise_action_execution_attempt",
+                    action_id=action_id,
+                    request_id=request_id,
+                    reason="invalid_approval_metadata",
+                    status_value=row["status"],
+                )
+                raise ValueError("Action approval metadata is invalid")
+
         if row["requester"].lower() == executor.email.lower():
             self._record_denial(
                 actor=executor.email,
