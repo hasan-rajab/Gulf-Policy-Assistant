@@ -356,3 +356,61 @@ def test_audit_store_rejects_blank_required_event_fields(tmp_path: Path, actor: 
             request_id="req-1",
             details={},
         )
+
+
+
+@pytest.mark.parametrize(
+    "bad_text",
+    [
+        "ticket\u202ereversed",
+        "ticket\u2066isolate",
+        "ticket\x00nul",
+        "ticket\u200bzero-width",
+    ],
+)
+def test_action_payload_rejects_unsafe_control_and_format_characters(action_env, bad_text: str):
+    _, actions, employee, _, _ = action_env
+    with pytest.raises(ValueError, match="unsafe control/format"):
+        actions.request(
+            principal=employee,
+            action_name="create_it_service_ticket",
+            payload={"summary": bad_text, "description": "review"},
+            request_id="unsafe-text",
+            idempotency_key="unsafe-text-key",
+        )
+
+
+@pytest.mark.parametrize(
+    "bad_actor",
+    [
+        "user\u202e@example.com",
+        "user\u2066@example.com",
+        "user\x00@example.com",
+        "user\u200b@example.com",
+    ],
+)
+def test_audit_store_rejects_unsafe_identity_characters(tmp_path: Path, bad_actor: str):
+    audit = SQLiteAuditStore(tmp_path / "audit-unsafe-identity.db")
+    with pytest.raises(ValueError, match="unsafe control/format"):
+        audit.record(
+            actor=bad_actor,
+            action="rag_query",
+            resource=None,
+            outcome="grounded",
+            request_id="unsafe-identity",
+            details={},
+        )
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_audit_store_rejects_nonfinite_detail_values(tmp_path: Path, value: float):
+    audit = SQLiteAuditStore(tmp_path / "audit-nonfinite-detail.db")
+    with pytest.raises(ValueError):
+        audit.record(
+            actor="employee@example.com",
+            action="risk_metric",
+            resource="metric-1",
+            outcome="observed",
+            request_id="nonfinite-detail",
+            details={"value": value},
+        )
