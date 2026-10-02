@@ -12,7 +12,7 @@ It is intentionally written in assurance language while preserving the repositor
 
 > **Claims boundary:** this is a self-contained portfolio control review of a fictional demo system. It is not an independent audit, SOC report, SOX opinion, ISAE 3402 engagement, regulatory certification, or evidence of production operating effectiveness over a real client population.
 
-The machine-readable risk/control matrix is in assurance/control_matrix.json. The executable review is in backend/app/services/assurance.py.
+The machine-readable risk/control matrix is in assurance/control_matrix.json. The executable review is in backend/app/services/assurance.py. The 1,000-case escalating campaign is in backend/scripts/run_adversarial_campaign.py, and its finding/remediation trail is in assurance/adversarial_findings.json.
 
 ---
 
@@ -129,6 +129,12 @@ The script builds disposable local stores and executes 20 control tests spanning
 
 The JSON report records each control ID, objective, pass/fail result, evidence description, and any exception.
 
+### Escalating adversarial campaign
+
+In addition to the 20-control review, CI runs a deterministic **1,000-case** adversarial campaign. Difficulty scores increase from 1 to 1,000, with each later case containing one additional unrelated audit-event distractor while the primary control family rotates across ten assurance domains.
+
+The first 1,000-case run produced **300 failures** across three new finding classes. Those were remediated, converted into targeted regression tests, and re-performed successfully at **1,000/1,000** in run #82.
+
 ### Important sampling limitation
 
 Automated tests provide strong reproducible evidence for the code paths exercised, but they are **not equivalent to testing a production population over a financial or operational period**.
@@ -174,7 +180,7 @@ NEXUS distinguishes a control failure from a portfolio scope limitation.
 
 ### Control exception
 
-NEXUS now preserves the development history of actual adversarial findings. CI run #65 exposed 12 failing adversarial cases and run #69 exposed 6 more. These were grouped into 12 distinct findings, remediated, and re-performed successfully. See assurance/adversarial_findings.json for the finding/remediation trail.
+NEXUS now preserves the development history of actual adversarial findings. CI run #65 exposed 12 failing adversarial cases, run #69 exposed 6 more, and run #78 exposed 300 failures in the new 1,000-case campaign. These were grouped into 15 distinct finding classes, remediated, converted into regression tests, and re-performed successfully. See assurance/adversarial_findings.json for the finding/remediation trail.
 
 ### Scope limitation / production gap
 
