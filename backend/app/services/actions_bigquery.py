@@ -9,7 +9,7 @@ from google.cloud import bigquery
 
 from app.core.access import AccessContext
 from app.core.config import Settings
-from app.services.actions import EnterpriseActionService
+from app.services.actions import EnterpriseActionService, _contains_unsafe_text_control
 from app.services.audit import AuditStore
 
 
@@ -75,6 +75,8 @@ class BigQueryEnterpriseActionService:
                 raise ValueError("Idempotency key cannot be blank")
             if len(idempotency_key) > 128:
                 raise ValueError("Idempotency key is too long")
+            if _contains_unsafe_text_control(idempotency_key):
+                raise ValueError("Idempotency key contains unsafe control/format characters")
 
         action_id = str(uuid4())
         created_at = datetime.now(timezone.utc)
