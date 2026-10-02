@@ -112,6 +112,32 @@ class SQLiteAuditStore:
             self._connection.commit()
         return {**event, "previous_hash": previous_hash, "event_hash": event_hash}
 
+    def list_events(self) -> list[dict[str, Any]]:
+        """Return ordered local audit events for deterministic assurance analytics."""
+        rows = self._connection.execute(
+            """
+            SELECT sequence, event_id, timestamp, actor, action, resource, outcome,
+                   request_id, details, previous_hash, event_hash
+            FROM audit_events ORDER BY sequence ASC
+            """
+        ).fetchall()
+        return [
+            {
+                "sequence": row[0],
+                "event_id": row[1],
+                "timestamp": row[2],
+                "actor": row[3],
+                "action": row[4],
+                "resource": row[5],
+                "outcome": row[6],
+                "request_id": row[7],
+                "details": json.loads(row[8]),
+                "previous_hash": row[9],
+                "event_hash": row[10],
+            }
+            for row in rows
+        ]
+
     def verify_chain(self) -> bool:
         rows = self._connection.execute(
             """
