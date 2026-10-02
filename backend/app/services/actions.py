@@ -4,6 +4,7 @@ import json
 import math
 import sqlite3
 import threading
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,17 @@ from uuid import uuid4
 
 from app.core.access import AccessContext
 from app.services.audit import AuditStore
+
+
+def _contains_unsafe_text_control(value: str) -> bool:
+    # Human-reviewed action text may contain ordinary newlines/tabs, but not
+    # invisible/bidirectional format controls or other control characters that
+    # can spoof reviewer-visible text or downstream logs.
+    allowed_controls = {"\n", "\r", "\t"}
+    return any(
+        ch not in allowed_controls and unicodedata.category(ch) in {"Cc", "Cf"}
+        for ch in value
+    )
 
 
 ACTION_REGISTRY = {
@@ -89,6 +101,8 @@ class EnterpriseActionService:
             text = str(value).strip()
             if not text or len(text) > 2000:
                 raise ValueError(f"Field '{key}' is empty or too long")
+            if _contains_unsafe_text_control(text):
+                raise ValueError(f"Field '{key}' contains unsafe control/format characters")
             clean[key] = text
         return clean
 
@@ -130,6 +144,8 @@ class EnterpriseActionService:
                 raise ValueError("Idempotency key cannot be blank")
             if len(idempotency_key) > 128:
                 raise ValueError("Idempotency key is too long")
+            if _contains_unsafe_text_control(idempotency_key):
+                raise ValueError("Idempotency key contains unsafe control/format characters")
 
         with self._lock:
             if idempotency_key:
