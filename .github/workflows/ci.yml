@@ -77,6 +77,19 @@ jobs:
           print('Strict NEXUS evaluation metrics check passed.')
           PY
 
+      - name: Run technology assurance control review
+        run: |
+          PYTHONPATH=backend python backend/scripts/run_assurance_review.py --output /tmp/nexus-assurance-report.json
+
+      - name: Upload assurance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexus-technology-assurance-report
+          path: /tmp/nexus-assurance-report.json
+          if-no-files-found: error
+          retention-days: 30
+
   frontend-build:
     name: Frontend production build
     runs-on: ubuntu-latest
