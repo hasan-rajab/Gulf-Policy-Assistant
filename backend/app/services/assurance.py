@@ -205,6 +205,60 @@ def run_assurance_review(work_dir: Path, repo_root: Path | None = None) -> dict[
         )
     )
 
+    blocked_idempotency_conflict = _capture_blocked(
+        lambda: actions.request(
+            principal=employee,
+            action_name="create_it_service_ticket",
+            payload={"summary": "VPN access", "description": "Changed request under reused key"},
+            request_id="assurance-idempotency-conflict",
+            idempotency_key="assurance-vpn-1",
+        ),
+        ValueError,
+    )
+    controls.append(
+        _result(
+            "ITAC-ACT-07",
+            "Processing integrity",
+            "An idempotency key cannot be reused for a materially different request.",
+            blocked_idempotency_conflict,
+            "Reused the original idempotency key with a changed payload.",
+        )
+    )
+
+    blocked_nonfinite_input = _capture_blocked(
+        lambda: actions.request(
+            principal=employee,
+            action_name="create_it_service_ticket",
+            payload={"summary": "Capacity", "description": "Numeric edge case", "priority": float("nan")},
+            request_id="assurance-nonfinite-input",
+        ),
+        ValueError,
+    )
+    controls.append(
+        _result(
+            "ITAC-ACT-08",
+            "Input validation",
+            "Malformed non-finite numeric values are rejected before persistence.",
+            blocked_nonfinite_input,
+            "Submitted a NaN priority value through the action payload validator.",
+        )
+    )
+
+    actions.approve(admin_request["id"], second_admin, "assurance-admin-request-approval")
+    blocked_requester_execution = _capture_blocked(
+        lambda: actions.execute(admin_request["id"], approver, "assurance-requester-execution"),
+        PermissionError,
+    )
+    controls.append(
+        _result(
+            "ITAC-ACT-09",
+            "Segregation of duties",
+            "A privileged requester cannot execute their own request after independent approval.",
+            blocked_requester_execution,
+            "Administrator requester attempted execution after approval by a second administrator.",
+        )
+    )
+
     approved = actions.approve(requested["id"], approver, "assurance-approval")
     executed = actions.execute(requested["id"], second_admin, "assurance-execution")
     controls.append(
@@ -260,6 +314,140 @@ def run_assurance_review(work_dir: Path, repo_root: Path | None = None) -> dict[
             "Stored audit-event modification is detectable by hash-chain verification.",
             tamper_audit.verify_chain() is False,
             "Controlled database tampering performed against disposable audit store.",
+        )
+    )
+
+    truncation_audit = SQLiteAuditStore(work_dir / "truncation-audit.db")
+    first_event = truncation_audit.record(
+        actor="employee@example.com",
+        action="rag_query",
+        resource="conversation-a",
+        outcome="grounded",
+        request_id="assurance-truncation-1",
+        details={},
+    )
+    truncation_audit.record(
+        actor="employee@example.com",
+        action="rag_query",
+        resource="conversation-b",
+        outcome="grounded",
+        request_id="assurance-truncation-2",
+        details={},
+    )
+    truncation_audit._connection.execute(
+        "DELETE FROM audit_events WHERE event_id != ?",
+        (first_event["event_id"],),
+    )
+    truncation_audit._connection.commit()
+    controls.append(
+        _result(
+            "GITC-OPS-03",
+            "IT operations / logging",
+            "Deletion of the most recent audit event is detectable against the persisted chain checkpoint.",
+            truncation_audit.verify_chain() is False,
+            "Deleted the tail event from a disposable two-event audit chain.",
+        )
+    )
+
+    required_field_audit = SQLiteAuditStore(work_dir / "required-field-audit.db")
+    blocked_blank_audit_field = _capture_blocked(
+        lambda: required_field_audit.record(
+            actor="",
+            action="rag_query",
+            resource=None,
+            outcome="grounded",
+            request_id="assurance-required-fields",
+            details={},
+        ),
+        ValueError,
+    )
+    controls.append(
+        _result(
+            "GITC-OPS-04",
+            "IT operations / logging",
+            "Required audit identity/action/outcome fields cannot be blank.",
+            blocked_blank_audit_field,
+            "Attempted to persist an audit event with a blank actor.",
+        )
+    )
+
+    provenance_audit = SQLiteAuditStore(work_dir / "provenance-audit.db")
+    provenance_actions = EnterpriseActionService(work_dir / "provenance-actions.db", provenance_audit)
+    provenance_request = provenance_actions.request(
+        principal=employee,
+        action_name="create_it_service_ticket",
+        payload={"summary": "VPN access", "description": "Approval provenance test"},
+        request_id="assurance-provenance-request",
+        idempotency_key="assurance-provenance-1",
+    )
+    provenance_actions._connection.execute(
+        "UPDATE action_requests SET status='approved' WHERE id=?",
+        (provenance_request["id"],),
+    )
+    provenance_actions._connection.commit()
+    blocked_forged_approval = _capture_blocked(
+        lambda: provenance_actions.execute(
+            provenance_request["id"], second_admin, "assurance-provenance-execute"
+        ),
+        ValueError,
+    )
+    controls.append(
+        _result(
+            "ITAC-ACT-10",
+            "Authorization / processing integrity",
+            "Execution requires complete, independent approval provenance rather than status alone.",
+            blocked_forged_approval,
+            "Directly flipped a disposable action row to approved without approver metadata.",
+        )
+    )
+
+    synthetic_exceptions = analyze_audit_events(
+        [
+            {
+                "actor": "requester@example.com",
+                "action": "enterprise_action_requested",
+                "resource": "SYN-1",
+                "outcome": "pending_approval",
+                "details": {},
+            },
+            {
+                "actor": "requester@example.com",
+                "action": "enterprise_action_approved",
+                "resource": "SYN-1",
+                "outcome": "approved",
+                "details": {"requester": "requester@example.com"},
+            },
+            {
+                "actor": "requester@example.com",
+                "action": "enterprise_action_executed",
+                "resource": "SYN-1",
+                "outcome": "executed",
+                "details": {},
+            },
+            {
+                "actor": "admin@example.com",
+                "action": "enterprise_action_executed",
+                "resource": "UNKNOWN",
+                "outcome": "executed",
+                "details": {},
+            },
+        ]
+    )
+    synthetic_types = {item["type"] for item in synthetic_exceptions["exceptions"]}
+    expected_types = {
+        "SELF_APPROVAL",
+        "REQUESTER_EXECUTION",
+        "EXECUTION_WITHOUT_REQUEST",
+        "EXECUTION_WITHOUT_RECORDED_APPROVAL",
+    }
+    controls.append(
+        _result(
+            "GITC-MON-02",
+            "Monitoring",
+            "Exception analytics surface deliberately injected approval/execution violations.",
+            expected_types.issubset(synthetic_types),
+            "Analyzed a synthetic event sequence containing known control violations.",
+            None if expected_types.issubset(synthetic_types) else str(sorted(synthetic_types)),
         )
     )
 
