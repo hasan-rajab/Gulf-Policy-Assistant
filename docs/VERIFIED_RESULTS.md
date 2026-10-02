@@ -4,16 +4,16 @@ This document records the strongest repository-backed validation evidence for NE
 
 ## Current reference validation
 
-**GitHub Actions:** NEXUS CI — run #74  
+**GitHub Actions:** NEXUS CI — run #82  
 **Date:** 2 October 2026  
-**Validated commit:** 83328e2eb599276b655d1d197b361308f7011c87  
+**Validated commit:** f0175250efb421ddc1151a118c1f35a3c20b85ec  
 **Workflow conclusion:** success
 
 ### Backend, security and assurance tests
 
-**36/36 tests passed** in CI.
+**47/47 regression tests passed** in CI.
 
-The suite now includes the original backend/security coverage plus two deliberate adversarial assurance rounds covering authorization, approval provenance, segregation of duties, replay/idempotency semantics, audit integrity, event-quality requirements and exception monitoring.
+The suite now includes the original backend/security coverage, two earlier adversarial assurance rounds, and targeted regression tests for the defects exposed by the later 1,000-case campaign.
 
 ### Adversarial testing and remediation
 
@@ -26,12 +26,21 @@ The assurance work was intentionally run red before remediation rather than repo
 - The second remediation round addressed audit-tail truncation, approval-provenance tampering and blank required audit-event fields.
 - **Run #72:** 36/36 tests passed after second-round remediation.
 - **Run #74:** 36/36 tests remained green after the executable assurance review was expanded.
+- **Run #78:** a new escalating **1,000-case** campaign produced **700 passes and 300 failures** across three additional finding classes: unsafe Unicode control/format characters in action text, unsafe Unicode control/format characters in audit identity fields, and non-finite numbers in canonical audit evidence.
+- Those three finding classes were remediated in the local and BigQuery-aligned paths and converted into targeted regression tests.
+- **Run #82:** **47/47 regression tests**, **1,000/1,000 escalating campaign cases**, and **20/20 executable assurance controls** passed.
 
-The failures are grouped into **12 distinct documented development/control findings** in assurance/adversarial_findings.json. These are findings against a self-built fictional system, not independent client-audit findings.
+The full history is grouped into **15 distinct documented development/control findings** in assurance/adversarial_findings.json. These are findings against a self-built fictional system, not independent client-audit findings.
+
+### 1,000-case escalating adversarial campaign
+
+The campaign assigns difficulty scores **1 through 1,000**. Every later case includes one additional unrelated audit-event distractor while the primary control family rotates across ten domains: pre-retrieval ACLs, idempotency conflict handling, self-approval, requester execution, orphan-execution analytics, duplicate-approval analytics, audit tamper detection, action-text Unicode controls, audit-identity Unicode controls, and non-finite audit evidence.
+
+The first run intentionally failed **300/1,000** cases, which produced three new finding classes rather than a cosmetic all-green result. After remediation, run #82 passed **1,000/1,000** cases at a maximum difficulty score of **1,000**.
 
 ### Executable Technology Assurance Control Review
 
-Run #74 executed a separate deterministic assurance review:
+Run #82 executed a separate deterministic assurance review:
 
 | Result | Value |
 |---|---:|
@@ -55,7 +64,7 @@ The same run retained the eight-case bilingual regression gate:
 | grounding_decision_accuracy | 1.0 |
 | language_match_rate | 1.0 |
 | grounded_keyword_coverage | 1.0 |
-| avg_latency_ms | 2.125 |
+| avg_latency_ms | 1.25 |
 
 ### Other CI gates
 
@@ -66,7 +75,7 @@ The same run retained the eight-case bilingual regression gate:
 
 ## What these results establish
 
-They establish reproducible control-design and negative-testing evidence on the self-built fictional NEXUS environment. More importantly than the final pass rate, the CI history shows that adversarial tests exposed control weaknesses, those weaknesses were documented and remediated, and the expanded regression suite was rerun successfully.
+They establish reproducible control-design and negative-testing evidence on the self-built fictional NEXUS environment. More importantly than the final pass rate, the CI history shows repeated red-to-green assurance cycles: weaknesses were deliberately sought, documented, remediated, converted into regression tests, and then re-performed at larger scale.
 
 ## What these results do **not** establish
 
